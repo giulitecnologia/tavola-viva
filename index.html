@@ -1,5 +1,11 @@
 <!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Tavola viva</title>
+<meta name="theme-color" content="#b23a55">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Tavola viva">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icone/favicon-32.png">
+<link rel="apple-touch-icon" href="icone/apple-touch-icon.png">
 <style>
 /* Layout: banco da disegno — barra superiore essenziale, palette verticale a sinistra, foglio al centro su piano grigio-verde; tema chiaro unico, pensato per la proiezione sulla LIM */
 :root{
@@ -291,6 +297,7 @@ const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); retu
 function applyTheme(id) {
   THEME = THEMES[id] || THEMES.corallo; DESK = THEME.desk; ACC = THEME.accent;
   const st = document.documentElement.style;
+  const mt = document.querySelector('meta[name="theme-color"]'); if (mt) mt.content = THEME.accent;
   for (const [v, k] of [['--accent', 'accent'], ['--accent-soft', 'soft'], ['--desk', 'desk'], ['--chrome', 'chrome'], ['--chrome-2', 'chrome2'], ['--line', 'line']]) st.setProperty(v, THEME[k]);
 }
 applyTheme(lsGet('tavolaviva.tema'));
@@ -1771,6 +1778,9 @@ window.addEventListener('pagehide', () => { clearTimeout(saveTimer); lsSet(LS.au
   }
   renderTop(); renderCtx();
 })();
+
+/* app installabile: sul sito si può installare come un'app e funziona anche senza internet */
+if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claude\.ai|claudeusercontent/.test(location.hostname)) navigator.serviceWorker.register('sw.js').catch(() => { });
 
 /* interfaccia di prova per le verifiche automatiche */
 window.TV = { exportSteps, setZoom, lineTargets, openExample, backToSheet, get D() { return D; }, U, get V() { return V; }, edges, cgeom, sheetDims, renderToCanvas, loadDoc, sampleDoc, snapPts };
