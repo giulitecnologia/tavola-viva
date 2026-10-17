@@ -273,7 +273,7 @@ const DASH = [0.35, 0.15];
 const LS = { esempi: 'tavolaviva.esempi', lim: 'tavolaviva.lim', prev: 'tavolaviva.precedente', auto: 'tavolaviva.auto', prefs: 'tavolaviva.prefs', boards: 'tavolaviva.tavole', last: 'tavolaviva.strumenti' };
 const TOOLNAME = { righello: 'Righello', riga: 'Riga', sq45: 'Squadra 45°', sq3060: 'Squadra 30°/60°', compasso: 'Compasso' };
 const RW = 3.2, GW = 2.6, CL = 8; // larghezza righello, larghezza riga, gamba del compasso (cm, scala 1)
-const PANEL_W = 132, DESK = '#c9d3d1', ACC = '#0a6873', HI = '#e8770e', SNAPC = '#2e7d4f';
+const PANEL_W = 132, DESK = '#c9d3d1', ACC = '#0a6873', HI = '#e8770e', SNAPC = '#2e7d4f', GUIDE = '#d6336c';
 
 const lsGet = k => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } };
@@ -292,7 +292,7 @@ function newDoc() {
   return { app: 'tavolaviva', v: 1, name: 'Tavola senza nome', sheet: Object.assign(defaultSheet(), p || {}), header: { nome: '', classe: '', data: todayStr(), numero: '' }, strokes: [], tools: [], steps: [] };
 }
 let D = newDoc();
-const U = { mode: 'sposta', pen: 'HB', dash: false, sel: null, lenMode: 'libera', lenVal: 10, view: -1, viewData: null, letter: 'punto', nextLetter: 'A', textSize: 0.5, hoverEdge: null };
+const U = { mode: 'sposta', pen: 'HB', dash: false, sel: null, selS: [], addSel: false, lenMode: 'libera', lenVal: 10, view: -1, viewData: null, letter: 'punto', nextLetter: 'A', textSize: 0.5, hoverEdge: null };
 
 /* ================= annulla / ripristina ================= */
 let undoS = [], redoS = [];
@@ -404,10 +404,10 @@ function circCirc(a, b) {
   for (const sg of [1, -1]) { const p = { x: px - sg * h * ey, y: py + sg * h * ex }; if (inArc(a, p) && inArc(b, p)) out.push(p); }
   return out;
 }
-function snapPts() {
-  if (snapCache) return snapCache;
+function snapPts() { if (!snapCache) snapCache = snapPtsOf(D.strokes); return snapCache; }
+function snapPtsOf(list) {
   const pts = [], segs = [], arcs = [];
-  for (const s of D.strokes) {
+  for (const s of list) {
     if (s.type === 'line') { pts.push({ x: s.x1, y: s.y1 }, { x: s.x2, y: s.y2 }); segs.push(s); }
     else if (s.type === 'mark') pts.push({ x: s.x, y: s.y });
     else if (s.type === 'arc') { arcs.push(s); pts.push({ x: s.cx, y: s.cy }); } // gli estremi degli archi di costruzione non sono punti notevoli: contano centri e incroci
@@ -420,7 +420,7 @@ function snapPts() {
   for (let i = 0; i < segs.length; i++) for (let j = i + 1; j < segs.length; j++) { const p = segSeg(segs[i], segs[j]); if (p) pts.push(p); }
   for (const s of segs) for (const c of arcs) pts.push(...segCirc(s, c));
   for (let i = 0; i < arcs.length; i++) for (let j = i + 1; j < arcs.length; j++) pts.push(...circCirc(arcs[i], arcs[j]));
-  snapCache = pts; return pts;
+  return pts;
 }
 function nearestSnap(p, px) {
   let best = null, bd = px * (U.tf || 1) / V.s;
@@ -499,6 +499,7 @@ function render() {
   const data = U.view >= 0 ? U.viewData : D;
   setS(); G.setLineDash([]); G.fillStyle = DESK; G.fillRect(0, 0, CW, CH);
   paintSheet(data, { ui: true });
+  if (U.view < 0) paintSelStrokes();
   paintTools(data);
   if (U.view < 0) paintOverlay();
 }
@@ -667,10 +668,14 @@ function paintPoints() { // i punti di costruzione si vedono mentre si sposta o 
   G.restore();
 }
 function paintOverlay() {
-  if (gst && ['move', 'rot', 'edge', 'seg', 'open', 'multi'].includes(gst.type) && gst.moved !== false) paintPoints();
+  if (gst && ['move', 'rot', 'edge', 'seg', 'open', 'multi', 'smove'].includes(gst.type) && gst.moved !== false) paintPoints();
   if (U.hoverEdge && !(gst && gst.type !== 'edge')) hiEdge(U.hoverEdge, HI);
   if (gst && gst.snapEdges) { hiEdge(gst.snapEdges[0], SNAPC); hiEdge(gst.snapEdges[1], SNAPC); }
   if (!gst) return;
+  if (gst.guides) for (const gd of gst.guides) { // linee guida di allineamento, come in Canva
+    const a = toScr(gd.a), b = toScr(gd.b); setS(); G.save(); G.strokeStyle = GUIDE; G.lineWidth = 1.6; G.setLineDash([7, 5]);
+    G.beginPath(); G.moveTo(a.x, a.y); G.lineTo(b.x, b.y); G.stroke(); G.restore();
+  }
   const pv = gst.prev;
   if (pv && pv.kind === 'line') {
     setW(); penStyle(U.pen, U.dash); if (pv.err) { G.strokeStyle = '#c0392b'; G.setLineDash([0.2, 0.15]); }
@@ -718,7 +723,7 @@ let gst = null, activeId = null;
 function evPt(e) { const r = cv.getBoundingClientRect(); const sx = e.clientX - r.left, sy = e.clientY - r.top; return { x: (sx - V.ox) / V.s, y: (sy - V.oy) / V.s }; }
 function ensureUndo() { if (!gst.undone) { pushUndo(); gst.undone = true; } }
 function bringFront(t) { const i = D.tools.indexOf(t); if (i >= 0 && i < D.tools.length - 1) { D.tools.splice(i, 1); D.tools.push(t); } }
-function select(t) { const id = t ? t.id : null; if (U.sel !== id) { U.sel = id; renderCtx(); } draw(); }
+function select(t) { const id = t ? t.id : null, had = U.selS.length; U.selS = []; if (!t) U.addSel = false; if (U.sel !== id || had) { U.sel = id; renderCtx(); } draw(); }
 
 function bodyAt(p, wantLocked) {
   for (let k = D.tools.length - 1; k >= 0; k--) { const t = D.tools[k]; if (!!t.locked !== !!wantLocked) continue; if (insideTool(t, p, 3 / V.s)) return t; }
@@ -792,6 +797,8 @@ function onDown(p, e) {
   if (U.mode === 'segmento') { let a = nearestSnap(p, 18) || (D.sheet.gridSnap ? gridSnap(p) : p); return G0('seg', null, { a, snapPt: nearestSnap(p, 18) }); }
   if (U.mode === 'matita') return G0('free', null, { pts: [[r3(p.x), r3(p.y)]] });
   // modalità Sposta: intestazione o deselezione
+  // modalità Sposta: toccare un segno lo seleziona; se è sbloccato si trascina
+  if (U.mode === 'sposta') { const i = hitStroke(p, U.tf > 1 ? 22 : 12); if (i >= 0) return pickStroke(D.strokes[i], G0); }
   if ((U.zoom || 1) > 1.001) return G0('pan', null, { c0: { x: U.cx, y: U.cy }, s0: { x: U.lastClient.x, y: U.lastClient.y }, hk: headerAt(p) });
   const hk = headerAt(p); if (hk) { editHeader(hk); return; }
   select(null);
@@ -911,6 +918,7 @@ function onMove(p) {
     }
     case 'free': { const l = g.pts[g.pts.length - 1]; if (Math.hypot(p.x - l[0], p.y - l[1]) * V.s >= 1.5) g.pts.push([r3(p.x), r3(p.y)]); g.prev = { kind: 'free', pts: g.pts }; break; }
     case 'erase': eraseAt(p); break;
+    case 'smove': moveStrokes(g, dp); break;
     case 'letter': if (t) { ensureUndo(); t.x = r3(g.o0.x + dp.x); t.y = r3(g.o0.y + dp.y); snapCache = null; } break;
   }
   draw();
@@ -937,6 +945,10 @@ function onUp(p) {
     }
     case 'free': if (g.pts.length >= 2) { pushUndo(); addStroke({ type: 'free', pts: g.pts }); changed(); } break;
     case 'erase': if (g.undone) changed(); else if (!g.moved) toast('Nessun segno da cancellare in quel punto.'); break;
+    case 'smove':
+      if (g.orig) changed();
+      else if (!g.moved && U.addSel && !g.added) { U.selS = U.selS.filter(id => id !== t.id); renderCtx(); } // secondo tocco: lo toglie dalla selezione
+      break;
     case 'letter':
       if (g.moved && t) { changed(); break; }
       if (t && t.type === 'text') { editText(t); break; }
@@ -1159,9 +1171,78 @@ const PENCIL = 'url("data:image/svg+xml,' + encodeURIComponent(PENCIL_SVG) + '")
 function hover(p) {
   let he = null, cur = 'default';
   if (U.mode !== 'gomma' && U.mode !== 'lettere' && !bodyAt(p, false)) he = edgeAt(p, 22 / V.s);
-  if (he) cur = PENCIL; else if (bodyAt(p, false)) cur = 'move'; else if ((U.zoom || 1) > 1.001 && U.mode === 'sposta') cur = 'grab'; else if (U.mode === 'matita' || U.mode === 'segmento') cur = PENCIL; else if (U.mode === 'gomma') cur = 'cell';
+  if (he) cur = PENCIL; else if (bodyAt(p, false)) cur = 'move'; else if (U.mode === 'sposta' && hitStroke(p, 12) >= 0) cur = 'pointer'; else if ((U.zoom || 1) > 1.001 && U.mode === 'sposta') cur = 'grab'; else if (U.mode === 'matita' || U.mode === 'segmento') cur = PENCIL; else if (U.mode === 'gomma') cur = 'cell';
   cv.style.cursor = cur;
   if (he !== U.hoverEdge && !(he && U.hoverEdge && he.t === U.hoverEdge.t && he.i === U.hoverEdge.i)) { U.hoverEdge = he; draw(); }
+}
+
+/* ================= spostare i segni disegnati ================= */
+// I segni sono bloccati finché non si preme “Sblocca”; restano sbloccati finché non si preme “Blocca”.
+// Trascinandoli, i loro punti si agganciano agli altri punti notevoli o si allineano in orizzontale/verticale.
+const STROKENAME = { line: 'Segmento', free: 'Tratto a mano', text: 'Scritta', module: 'Modulo', mark: 'Centro' };
+const strokeName = s => s.type === 'arc' ? (Math.abs(s.sw) >= TAU - 1e-6 ? 'Circonferenza' : 'Arco') : STROKENAME[s.type] || 'Segno';
+const selStrokes = () => U.selS.map(id => D.strokes.find(s => s.id === id)).filter(Boolean);
+function keyPts(s) {
+  if (s.type === 'line') return [{ x: s.x1, y: s.y1 }, { x: s.x2, y: s.y2 }, { x: (s.x1 + s.x2) / 2, y: (s.y1 + s.y2) / 2 }];
+  if (s.type === 'arc') { const c = { x: s.cx, y: s.cy }; return Math.abs(s.sw) >= TAU - 1e-6 ? [c, { x: c.x + s.r, y: c.y }, { x: c.x - s.r, y: c.y }, { x: c.x, y: c.y + s.r }, { x: c.x, y: c.y - s.r }] : [c, arcPt(s, s.a0), arcPt(s, s.a0 + s.sw)]; }
+  if (s.type === 'free') { const a = s.pts[0], b = s.pts[s.pts.length - 1]; return [{ x: a[0], y: a[1] }, { x: b[0], y: b[1] }]; }
+  if (s.type === 'module') return [{ x: s.x, y: s.y }, { x: s.x + s.w, y: s.y }, { x: s.x, y: s.y + s.h }, { x: s.x + s.w, y: s.y + s.h }];
+  return [{ x: s.x, y: s.y }];
+}
+function shiftStroke(s, o, d) {
+  if (s.type === 'line') { s.x1 = r3(o.x1 + d.x); s.y1 = r3(o.y1 + d.y); s.x2 = r3(o.x2 + d.x); s.y2 = r3(o.y2 + d.y); }
+  else if (s.type === 'arc') { s.cx = r3(o.cx + d.x); s.cy = r3(o.cy + d.y); }
+  else if (s.type === 'free') s.pts = o.pts.map(q => [r3(q[0] + d.x), r3(q[1] + d.y)]);
+  else { s.x = r3(o.x + d.x); s.y = r3(o.y + d.y); }
+}
+function pickStroke(s, G0) {
+  let added = false;
+  if (!U.selS.includes(s.id)) { if (U.addSel) U.selS.push(s.id); else U.selS = [s.id]; added = true; }
+  U.sel = null; renderCtx();
+  return G0('smove', s, { added });
+}
+function moveStrokes(g, dp) {
+  const ss = selStrokes();
+  if (ss.some(x => !x.unlocked)) { if (!g.warned) { g.warned = true; toast(ss.length > 1 ? 'Alcuni elementi sono bloccati: tocca “Sblocca” per spostarli.' : 'Elemento bloccato: tocca “Sblocca” per spostarlo.'); } return; }
+  if (!g.orig) {
+    ensureUndo(); const ids = new Set(ss.map(x => x.id));
+    g.orig = new Map(ss.map(x => [x.id, clone(x)])); g.keys = ss.flatMap(keyPts); g.targets = snapPtsOf(D.strokes.filter(x => !ids.has(x.id)));
+  }
+  const tf = U.tf || 1, tolP = 16 * tf / V.s, tolG = 8 * tf / V.s;
+  let d = { x: dp.x, y: dp.y }, best = null; g.guides = null; g.snapPt = null;
+  for (const k of g.keys) for (const q of g.targets) { const e = Math.hypot(k.x + d.x - q.x, k.y + d.y - q.y); if (e < tolP && (!best || e < best.e)) best = { e, k, q }; }
+  if (best) { d = sub(best.q, best.k); g.snapPt = best.q; }
+  else {
+    let bx = null, by = null;
+    for (const k of g.keys) for (const q of g.targets) {
+      const ex = Math.abs(k.x + d.x - q.x), ey = Math.abs(k.y + d.y - q.y);
+      if (ex < tolG && (!bx || ex < bx.e)) bx = { e: ex, v: q.x - k.x, at: q.x };
+      if (ey < tolG && (!by || ey < by.e)) by = { e: ey, v: q.y - k.y, at: q.y };
+    }
+    if (bx) d.x = bx.v; if (by) d.y = by.v;
+    g.guides = [];
+    const span = (ax, at) => { // la guida va dal punto più lontano all'altro, fra quelli allineati
+      const o = ax === 'x' ? 'y' : 'x', vs = [];
+      for (const q of g.targets) if (Math.abs(q[ax] - at) < 1e-6) vs.push(q[o]);
+      for (const k of g.keys) if (Math.abs(k[ax] + d[ax] - at) < 1e-6) vs.push(k[o] + d[o]);
+      const lo = Math.min(...vs) - 0.6, hi = Math.max(...vs) + 0.6;
+      g.guides.push(ax === 'x' ? { a: { x: at, y: lo }, b: { x: at, y: hi } } : { a: { x: lo, y: at }, b: { x: hi, y: at } });
+    };
+    if (bx) span('x', bx.at); if (by) span('y', by.at);
+  }
+  for (const x of ss) shiftStroke(x, g.orig.get(x.id), d);
+  snapCache = null;
+}
+function paintSelStrokes() {
+  for (const s of selStrokes()) {
+    setW(); G.save(); G.setLineDash([]); G.strokeStyle = s.unlocked ? 'rgba(232,119,14,0.5)' : 'rgba(10,104,115,0.35)';
+    G.lineWidth = 11 / V.s; G.lineCap = 'round'; G.lineJoin = 'round'; G.beginPath();
+    if (s.type === 'line') { G.moveTo(s.x1, s.y1); G.lineTo(s.x2, s.y2); }
+    else if (s.type === 'arc') G.arc(s.cx, s.cy, s.r, s.a0, s.a0 + s.sw, s.sw < 0);
+    else if (s.type === 'free') s.pts.forEach((q, i) => i ? G.lineTo(q[0], q[1]) : G.moveTo(q[0], q[1]));
+    else { const b = strokeBox(s); G.lineWidth = 4 / V.s; G.rect(b[0] - 0.12, b[1] - 0.12, b[2] - b[0] + 0.24, b[3] - b[1] + 0.24); }
+    G.stroke(); G.restore();
+  }
 }
 
 /* ================= lettere ================= */
@@ -1316,7 +1397,7 @@ $('#pen2H').onclick = () => { U.pen = '2H'; renderTop(); draw(); };
 $('#penHB').onclick = () => { U.pen = 'HB'; renderTop(); draw(); };
 $('#dashBtn').onclick = () => { U.dash = !U.dash; renderTop(); };
 $('#undoBtn').onclick = doUndo; $('#redoBtn').onclick = doRedo;
-document.querySelectorAll('.pal[data-mode]').forEach(b => b.onclick = () => { if (U.view >= 0) return toast('Premi “Riprendi disegno” per tornare a disegnare.'); U.mode = b.dataset.mode; if (U.mode === 'gomma' || U.mode === 'lettere') U.sel = null; renderTop(); renderCtx(); draw(); });
+document.querySelectorAll('.pal[data-mode]').forEach(b => b.onclick = () => { if (U.view >= 0) return toast('Premi “Riprendi disegno” per tornare a disegnare.'); U.mode = b.dataset.mode; U.selS = []; U.addSel = false; if (U.mode === 'gomma' || U.mode === 'lettere') U.sel = null; renderTop(); renderCtx(); draw(); });
 // ogni strumento ricompare dove e come è stato usato l'ultima volta (posizione, rotazione, apertura del compasso)
 const TOOLKEYS = { compasso: ['x', 'y', 'ang', 'r', 's'], other: ['x', 'y', 'rot', 'len'] };
 function rememberTools() {
@@ -1356,7 +1437,14 @@ function renderCtx() {
   const bar = $('#ctxbar');
   const t = selTool(); let h = '';
   if (U.view >= 0) { bar.hidden = true; return; }
-  if (t && t.kind === 'compasso') {
+  const ss = !t && U.mode === 'sposta' ? selStrokes() : [];
+  if (ss.length) {
+    const lk = ss.some(x => !x.unlocked);
+    h = `<div class="ttl">${ss.length === 1 ? strokeName(ss[0]) : ss.length + ' elementi'}</div>
+      <span class="hint">${U.addSel ? 'Tocca altri segni per aggiungerli o toglierli.' : lk ? 'Bloccato: tocca “Sblocca” per poterlo spostare.' : 'Trascinalo: si aggancia e si allinea agli altri segni.'}</span>
+      <button class="chip ${lk ? '' : 'on'}" data-a="slock">${lockIcon(lk)}${lk ? 'Sblocca' : 'Blocca'}</button><div class="sp"></div>
+      <button class="chip ${U.addSel ? 'on' : ''}" data-a="addsel">Seleziona altri</button><button class="chip" data-a="selall">Seleziona tutto</button><button class="chip" data-a="selnone">Deseleziona</button>`;
+  } else if (t && t.kind === 'compasso') {
     h = `<div class="ttl">Compasso</div><span class="hint">Con due dita lo prendi, lo sposti e lo giri.</span><div class="lbl">Apertura cm</div><button class="numbox" id="radBox" data-a="radbox">${fmt(t.r)}</button><div class="sp"></div><button class="chip" data-a="center"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Segna il centro</button>`;
   } else if (t) {
     h = `<div class="ttl">${TOOLNAME[t.kind]}</div><span class="hint">Appoggia due o tre dita per spostarlo e ruotarlo.</span>${lenControls()}<div class="lbl">Aggancio</div><button class="chip ${D.sheet.magnet ? 'on' : ''}" data-a="magnet">${D.sheet.magnet ? 'Attivo' : 'Spento'}</button>`;
@@ -1379,7 +1467,11 @@ function updateCtxValue() { const b = $('#radBox'); const t = selTool(); if (b &
 $('#ctxbar').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return; const t = selTool(), a = b.dataset.a;
   if (b.dataset.l) { U.letter = b.dataset.l; renderCtx(); return; }
-  if (a === 'libera') { U.lenMode = 'libera'; renderCtx(); }
+  if (a === 'slock') { const ss = selStrokes(), lk = ss.some(x => !x.unlocked); pushUndo(); ss.forEach(x => { if (lk) x.unlocked = true; else delete x.unlocked; }); changed(); if (lk) toast(ss.length > 1 ? 'Sbloccati: ora puoi trascinarli.' : 'Sbloccato: ora puoi trascinarlo.'); }
+  else if (a === 'addsel') { U.addSel = !U.addSel; renderCtx(); }
+  else if (a === 'selall') { U.selS = D.strokes.map(x => x.id); renderCtx(); draw(); }
+  else if (a === 'selnone') { U.selS = []; U.addSel = false; renderCtx(); draw(); }
+  else if (a === 'libera') { U.lenMode = 'libera'; renderCtx(); }
   else if (a === 'precisa') { U.lenMode = 'precisa'; renderCtx(); }
   else if (a === 'lenbox') openNum({ title: 'Lunghezza del segmento (cm)', value: U.lenVal, min: 0.1, max: 100, onOk: v => { U.lenVal = v; U.lenMode = 'precisa'; renderCtx(); toast('Lunghezza precisa: ' + fmt(v) + ' cm. Parti dal punto iniziale e trascina nella direzione voluta.'); } });
   else if (a === 'radbox' && t) openNum({ title: 'Apertura del compasso (cm)', value: t.r, min: 0.2, max: 60, onOk: v => { pushUndo(); t.r = v; if (cmaxR(t) < v) t.s = v / (2 * CL * 0.97); changed(); } });
@@ -1503,7 +1595,7 @@ function loadDoc(o) {
   D.steps = D.steps || []; D.tools = D.tools || []; D.strokes = D.strokes || [];
   const fixSq = arr => arr.forEach(t => { if (SQMIN[t.kind] && !(t.len >= SQMIN[t.kind])) t.len = SQMIN[t.kind]; });
   fixSq(D.tools); D.steps.forEach(s => fixSq(s.tools || []));
-  undoS = []; redoS = []; U.view = -1; U.viewData = null; U.sel = null; gst = null; U.zoom = 1; layout(); changed(); if (typeof renderView === 'function') renderView();
+  undoS = []; redoS = []; U.view = -1; U.viewData = null; U.sel = null; U.selS = []; U.addSel = false; gst = null; U.zoom = 1; layout(); changed(); if (typeof renderView === 'function') renderView();
 }
 function renderToCanvas(data, pxPerCm, opts) {
   const { w, h } = sheetDims(data.sheet), c = document.createElement('canvas'); c.width = Math.round(w * pxPerCm); c.height = Math.round(h * pxPerCm);
