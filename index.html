@@ -270,7 +270,7 @@ const FONT_TEC = '"Arial Narrow","Helvetica Neue",Arial,sans-serif';
 const FORMATS = { '33x24': { w: 33, h: 24, n: '33 × 24 cm' }, '48x33': { w: 48, h: 33, n: '48 × 33 cm' }, 'A4': { w: 29.7, h: 21, n: 'A4' }, 'A3': { w: 42, h: 29.7, n: 'A3' } };
 const PENS = { '2H': { w: 0.035, min: 1.3, col: '#7f8c98' }, 'HB': { w: 0.075, min: 2.5, col: '#1c2126' } };
 const DASH = [0.35, 0.15];
-const LS = { esempi: 'tavolaviva.esempi', lim: 'tavolaviva.lim', prev: 'tavolaviva.precedente', auto: 'tavolaviva.auto', prefs: 'tavolaviva.prefs', boards: 'tavolaviva.tavole' };
+const LS = { esempi: 'tavolaviva.esempi', lim: 'tavolaviva.lim', prev: 'tavolaviva.precedente', auto: 'tavolaviva.auto', prefs: 'tavolaviva.prefs', boards: 'tavolaviva.tavole', last: 'tavolaviva.strumenti' };
 const TOOLNAME = { righello: 'Righello', riga: 'Riga', sq45: 'Squadra 45°', sq3060: 'Squadra 30°/60°', compasso: 'Compasso' };
 const RW = 3.2, GW = 2.6, CL = 8; // larghezza righello, larghezza riga, gamba del compasso (cm, scala 1)
 const PANEL_W = 132, DESK = '#c9d3d1', ACC = '#0a6873', HI = '#e8770e', SNAPC = '#2e7d4f';
@@ -311,7 +311,7 @@ let saveTimer = 0, saveWarned = false;
 function changed(opts) {
   snapCache = null;
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => { if (!lsSet(LS.auto, D) && !saveWarned) { saveWarned = true; toast('Salvataggio automatico non riuscito: scarica il file per sicurezza.', 'warn'); } }, 400);
+  saveTimer = setTimeout(() => { rememberTools(); if (!lsSet(LS.auto, D) && !saveWarned) { saveWarned = true; toast('Salvataggio automatico non riuscito: scarica il file per sicurezza.', 'warn'); } }, 400);
   renderTop(); renderCtx(); draw();
 }
 
@@ -1317,13 +1317,30 @@ $('#penHB').onclick = () => { U.pen = 'HB'; renderTop(); draw(); };
 $('#dashBtn').onclick = () => { U.dash = !U.dash; renderTop(); };
 $('#undoBtn').onclick = doUndo; $('#redoBtn').onclick = doRedo;
 document.querySelectorAll('.pal[data-mode]').forEach(b => b.onclick = () => { if (U.view >= 0) return toast('Premi “Riprendi disegno” per tornare a disegnare.'); U.mode = b.dataset.mode; if (U.mode === 'gomma' || U.mode === 'lettere') U.sel = null; renderTop(); renderCtx(); draw(); });
+// ogni strumento ricompare dove e come è stato usato l'ultima volta (posizione, rotazione, apertura del compasso)
+const TOOLKEYS = { compasso: ['x', 'y', 'ang', 'r', 's'], other: ['x', 'y', 'rot', 'len'] };
+function rememberTools() {
+  if (D.example || !D.tools.length) return;
+  const m = lsGet(LS.last) || {};
+  for (const t of D.tools) { const o = {}; for (const k of TOOLKEYS[t.kind === 'compasso' ? 'compasso' : 'other']) o[k] = t[k]; m[t.kind] = o; } // l'ultimo dell'elenco è quello toccato per ultimo
+  lsSet(LS.last, m);
+}
 let addCount = 0;
 document.querySelectorAll('.pal[data-add]').forEach(b => b.onclick = () => {
   if (U.view >= 0) return toast('Premi “Riprendi disegno” per tornare a disegnare.');
-  const kind = b.dataset.add, { w, h } = sheetDims(D.sheet), off = (addCount++ % 4) * 1.2, t = mkTool(kind);
-  if (kind === 'compasso') { t.x = w / 2 - 3 + off; t.y = h / 2 + 2 + off; t.r = 5; t.ang = 0; }
-  else if (kind === 'sq45' || kind === 'sq3060') { const P = polyL(t), b = P[2].x, hh = -P[1].y; t.x = Math.max(0.3, (w - b) / 2) + off; t.y = Math.min(h - 0.3, (h + hh) / 2) - off; }
-  else { const cl = centroidL(t); t.x = w / 2 - cl.x + off; t.y = h / 2 - cl.y + off; }
+  const kind = b.dataset.add, { w, h } = sheetDims(D.sheet), m = D.sheet.frame ? D.sheet.margin : 0.5, off = (addCount++ % 4) * 1.2;
+  const last = (lsGet(LS.last) || {})[kind];
+  let t = mkTool(kind, last ? clone(last) : null);
+  if (SQMIN[kind] && !(t.len >= SQMIN[kind])) t.len = SQMIN[kind];
+  const c = t.kind === 'compasso' ? { x: t.x, y: t.y } : toW(t, centroidL(t));
+  if (!last || c.x < 0 || c.y < 0 || c.x > w || c.y > h) { // prima volta, o il foglio è cambiato: posizione comoda
+    t = mkTool(kind, kind === 'compasso' && last ? { r: last.r, s: last.s } : null);
+    if (kind === 'compasso') { t.x = w / 2 - 3; t.y = h / 2 + 2; }
+    else if (SQMIN[kind]) { t.x = m; t.y = h - m; } // appoggiata sulla squadratura, con l'angolo retto nell'angolo in basso a sinistra
+    else { t.x = m + 1; t.y = h - m - (kind === 'riga' ? GW : RW) - 1; }
+  }
+  // se lo stesso strumento è già lì, il nuovo compare un po' spostato per non coprirlo
+  if (D.tools.some(o => o.kind === kind && Math.hypot(o.x - t.x, o.y - t.y) < 0.6)) { t.x += 1.2 + off; t.y -= 1.2 + off; }
   pushUndo(); D.tools.push(t); U.sel = t.id; if (U.mode === 'gomma' || U.mode === 'lettere') U.mode = 'sposta';
   changed();
 });
