@@ -3,14 +3,14 @@
 <style>
 /* Layout: banco da disegno — barra superiore essenziale, palette verticale a sinistra, foglio al centro su piano grigio-verde; tema chiaro unico, pensato per la proiezione sulla LIM */
 :root{
-  --desk:#c9d3d1;       /* piano del tavolo */
-  --chrome:#f5f7f6;     /* barre */
-  --chrome-2:#e9eeed;
+  --desk:#e3d2d0;       /* piano del tavolo (cambia col tema) */
+  --chrome:#fbf6f5;     /* barre */
+  --chrome-2:#f3e7e5;
   --ink:#1d282b;
   --muted:#5b6b6f;
-  --line:#ccd7d5;
-  --accent:#0a6873;     /* blu-petrolio, colore degli strumenti */
-  --accent-soft:#d6ecee;
+  --line:#e5d0cd;
+  --accent:#b23a55;     /* colore dei comandi e degli strumenti (cambia col tema) */
+  --accent-soft:#f7dfe4;
   --warn:#a6501a;
   --warn-soft:#fbe9dc;
   --ok:#2e7d4f;
@@ -25,10 +25,12 @@ button{font:inherit;color:inherit}
 #app{position:fixed;inset:0;display:grid;grid-template-columns:96px 1fr;grid-template-rows:auto 1fr;background:var(--desk)}
 
 /* ---------- barra superiore ---------- */
-#top{grid-column:1/3;display:flex;align-items:center;gap:10px;padding:7px 12px;padding-top:calc(7px + env(safe-area-inset-top,0px));background:var(--chrome);border-bottom:1px solid var(--line);min-width:0;overflow-x:auto;scrollbar-width:none}
+#top{grid-column:1/3;display:flex;align-items:center;gap:10px;padding:7px 12px;padding-top:calc(7px + env(safe-area-inset-top,0px));background:var(--chrome);border-bottom:3px solid var(--accent);min-width:0;overflow-x:auto;scrollbar-width:none}
 #top::-webkit-scrollbar{display:none}
 .brand{display:flex;align-items:baseline;gap:6px;font-weight:700;letter-spacing:.01em;white-space:nowrap;padding-right:6px}
 .brand b{font-size:17px}
+.brand .logo{width:28px;height:28px;color:var(--accent);align-self:center;flex:none}
+.sw{display:inline-block;width:18px;height:18px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #0003}
 .grp{display:flex;align-items:center;gap:4px;flex:none}
 .sep{width:1px;align-self:stretch;background:var(--line);flex:none;margin:4px 2px}
 .spacer{flex:1 1 0;min-width:4px}
@@ -136,7 +138,7 @@ button{font:inherit;color:inherit}
 </head><body>
 <div id="app">
   <header id="top">
-    <div class="brand"><b>Tavola viva</b><small id="docName" hidden></small></div>
+    <div class="brand"><svg class="logo" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 26a13 13 0 0 1 22 0" stroke-width="1.6" stroke-dasharray="2.5 2.5"/><path d="M16 4v3M16 7 9 26M16 7l7 19"/><circle cx="16" cy="8" r="2.2" fill="currentColor"/></svg><b>Tavola viva</b><small id="docName" hidden></small></div>
     <div class="grp" id="exBar" hidden><span class="exlbl hide-m" id="exLbl">Esempio</span><button class="btn primary" id="exBack"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>Chiudi esempio</button></div>
     <div class="sep"></div>
     <div class="grp" id="penGrp">
@@ -273,10 +275,25 @@ const DASH = [0.35, 0.15];
 const LS = { esempi: 'tavolaviva.esempi', lim: 'tavolaviva.lim', prev: 'tavolaviva.precedente', auto: 'tavolaviva.auto', prefs: 'tavolaviva.prefs', boards: 'tavolaviva.tavole', last: 'tavolaviva.strumenti' };
 const TOOLNAME = { righello: 'Righello', riga: 'Riga', sq45: 'Squadra 45°', sq3060: 'Squadra 30°/60°', compasso: 'Compasso' };
 const RW = 3.2, GW = 2.6, CL = 8; // larghezza righello, larghezza riga, gamba del compasso (cm, scala 1)
-const PANEL_W = 132, DESK = '#c9d3d1', ACC = '#0a6873', HI = '#e8770e', SNAPC = '#2e7d4f', GUIDE = '#d6336c';
+// temi dell'interfaccia: il foglio resta bianco a quadretti, cambiano banco, barre, strumenti e colore dei comandi
+const THEMES = {
+  corallo: { n: 'Corallo', accent: '#b23a55', soft: '#f7dfe4', desk: '#e3d2d0', chrome: '#fbf6f5', chrome2: '#f3e7e5', line: '#e5d0cd', tool: '#e0708a', ink: '#5a1e2d' },
+  lavanda: { n: 'Lavanda', accent: '#6247aa', soft: '#e8e2f6', desk: '#d6d1e4', chrome: '#f8f6fc', chrome2: '#edeaf6', line: '#d9d2e8', tool: '#8d6fe0', ink: '#2e1f5c' },
+  salvia: { n: 'Salvia', accent: '#39724a', soft: '#dfede2', desk: '#cddacd', chrome: '#f6f9f6', chrome2: '#e7efe8', line: '#cfdcd0', tool: '#5aae78', ink: '#1d4a2b' },
+  petrolio: { n: 'Petrolio', accent: '#0a6873', soft: '#d6ecee', desk: '#c9d3d1', chrome: '#f5f7f6', chrome2: '#e9eeed', line: '#ccd7d5', tool: '#28a0b9', ink: '#0c323a' }
+};
+const rgbaOf = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+let THEME = THEMES.corallo, DESK = THEME.desk, ACC = THEME.accent;
+const PANEL_W = 132, HI = '#e8770e', SNAPC = '#2e7d4f', GUIDE = '#d6336c';
 
 const lsGet = k => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } };
+function applyTheme(id) {
+  THEME = THEMES[id] || THEMES.corallo; DESK = THEME.desk; ACC = THEME.accent;
+  const st = document.documentElement.style;
+  for (const [v, k] of [['--accent', 'accent'], ['--accent-soft', 'soft'], ['--desk', 'desk'], ['--chrome', 'chrome'], ['--chrome-2', 'chrome2'], ['--line', 'line']]) st.setProperty(v, THEME[k]);
+}
+applyTheme(lsGet('tavolaviva.tema'));
 
 /* ================= documento ================= */
 const defaultSheet = () => ({ fmt: '33x24', orient: 'O', cw: 33, ch: 24, grid: true, frame: true, centri: true, margin: 1, gridSnap: false, magnet: true });
@@ -579,18 +596,18 @@ function paintTools(data) {
 function toolPath(t) { const p = polyL(t); G.beginPath(); p.forEach((q, i) => i ? G.lineTo(q.x, q.y) : G.moveTo(q.x, q.y)); G.closePath(); }
 function paintStraight(t, sel) {
   setW(); G.save(); G.transform(Math.cos(t.rot), Math.sin(t.rot), -Math.sin(t.rot), Math.cos(t.rot), t.x, t.y);
-  const tint = t.kind === 'riga' ? 'rgba(232,170,60,0.22)' : 'rgba(40,160,185,0.20)', edge = t.kind === 'riga' ? 'rgba(140,90,10,0.85)' : 'rgba(10,104,115,0.9)';
+  const tint = t.kind === 'riga' ? 'rgba(232,170,60,0.22)' : rgbaOf(THEME.tool, 0.2), edge = t.kind === 'riga' ? 'rgba(140,90,10,0.85)' : rgbaOf(ACC, 0.9);
   toolPath(t); G.fillStyle = tint; G.fill();
   G.lineWidth = (sel ? 2.4 : 1.4) / V.s; G.strokeStyle = sel ? ACC : edge; G.setLineDash([]); G.stroke();
   const tick = (x0, y0, x1, y1) => { G.moveTo(x0, y0); G.lineTo(x1, y1); };
-  G.strokeStyle = 'rgba(12,50,58,0.85)'; G.lineWidth = 1 / V.s;
+  G.strokeStyle = rgbaOf(THEME.ink, 0.85); G.lineWidth = 1 / V.s;
   const mmOk = 0.1 * V.s >= 2.4;
   if (t.kind === 'righello') {
     const n = Math.round(t.len * 10); G.beginPath();
     for (let i = 0; i <= n; i++) { const x = 0.6 + i * 0.1, L = i % 10 === 0 ? 0.75 : i % 5 === 0 ? 0.5 : 0.28; if (i % 10 && !mmOk && i % 5) continue; tick(x, 0, x, L); }
     G.stroke();
     // bordo inferiore: riga di riferimento
-    G.beginPath(); G.lineWidth = 0.8 / V.s; G.strokeStyle = 'rgba(10,104,115,0.35)'; tick(0.3, RW - 0.35, t.len + 0.9, RW - 0.35); G.stroke();
+    G.beginPath(); G.lineWidth = 0.8 / V.s; G.strokeStyle = rgbaOf(ACC, 0.35); tick(0.3, RW - 0.35, t.len + 0.9, RW - 0.35); G.stroke();
   } else if (t.kind === 'sq45' || t.kind === 'sq3060') {
     const P = polyL(t), b = P[2].x, h = -P[1].y;
     // scala lungo il cateto orizzontale, a partire da 1 cm dal vertice retto
@@ -598,21 +615,21 @@ function paintStraight(t, sel) {
     for (let i = 0; i <= n; i++) { const x = SQX0 + i * 0.1, L = i % 10 === 0 ? 0.6 : i % 5 === 0 ? 0.4 : 0.22; if (i % 10 && !mmOk && i % 5) continue; tick(x, 0, x, -L); }
     G.stroke();
     // finestra interna
-    const k = 0.45, ox = b * 0.17, oy = -h * 0.17; G.beginPath(); G.moveTo(ox, oy); G.lineTo(ox, oy - h * k); G.lineTo(ox + b * k, oy); G.closePath(); G.lineWidth = 1 / V.s; G.strokeStyle = 'rgba(10,104,115,0.45)'; G.stroke();
+    const k = 0.45, ox = b * 0.17, oy = -h * 0.17; G.beginPath(); G.moveTo(ox, oy); G.lineTo(ox, oy - h * k); G.lineTo(ox + b * k, oy); G.closePath(); G.lineWidth = 1 / V.s; G.strokeStyle = rgbaOf(ACC, 0.45); G.stroke();
   }
   G.restore();
   // numeri e etichette in coordinate schermo
   if (t.kind === 'righello') {
     const px = 0.34 * V.s; const step = px < 9 ? (0.34 * V.s < 6 ? 5 : 2) : 1;
-    for (let c = 0; c <= t.len; c += step) drawTxt(String(c), toW(t, { x: 0.6 + c, y: 1.2 }), 0.36, 'rgba(12,50,58,0.95)', 'center', t.rot, { minPx: 9, font: FONT_UI, bold: true });
-    drawTxt('cm', toW(t, { x: 0.6 + Math.min(t.len, 3) - 1.5, y: 2.4 }), 0.32, 'rgba(12,50,58,0.6)', 'center', t.rot, { minPx: 9, font: FONT_UI });
+    for (let c = 0; c <= t.len; c += step) drawTxt(String(c), toW(t, { x: 0.6 + c, y: 1.2 }), 0.36, rgbaOf(THEME.ink, 0.95), 'center', t.rot, { minPx: 9, font: FONT_UI, bold: true });
+    drawTxt('cm', toW(t, { x: 0.6 + Math.min(t.len, 3) - 1.5, y: 2.4 }), 0.32, rgbaOf(THEME.ink, 0.6), 'center', t.rot, { minPx: 9, font: FONT_UI });
   } else if (t.kind === 'sq45' || t.kind === 'sq3060') {
     const P = polyL(t), b = P[2].x, h = -P[1].y, step = 0.34 * V.s < 9 ? 2 : 1;
-    for (let c = 0; c <= SQSCALE[t.kind]; c += step) drawTxt(String(c), toW(t, { x: SQX0 + c, y: -0.95 }), 0.3, 'rgba(12,50,58,0.9)', 'center', t.rot, { minPx: 8, font: FONT_UI, bold: true });
+    for (let c = 0; c <= SQSCALE[t.kind]; c += step) drawTxt(String(c), toW(t, { x: SQX0 + c, y: -0.95 }), 0.3, rgbaOf(THEME.ink, 0.9), 'center', t.rot, { minPx: 8, font: FONT_UI, bold: true });
     const a1 = t.kind === 'sq45' ? '45°' : '30°', a2 = t.kind === 'sq45' ? '45°' : '60°';
-    drawTxt('90°', toW(t, { x: 0.3, y: -1.75 }), 0.36, 'rgba(12,50,58,0.75)', 'left', t.rot, { minPx: 9, font: FONT_UI, bold: true });
-    drawTxt(a1, toW(t, { x: b - 5, y: -2.1 }), 0.36, 'rgba(12,50,58,0.75)', 'center', t.rot, { minPx: 9, font: FONT_UI, bold: true });
-    drawTxt(a2, toW(t, { x: 0.55, y: -h + 3.2 }), 0.36, 'rgba(12,50,58,0.75)', 'left', t.rot, { minPx: 9, font: FONT_UI, bold: true });
+    drawTxt('90°', toW(t, { x: 0.3, y: -1.75 }), 0.36, rgbaOf(THEME.ink, 0.75), 'left', t.rot, { minPx: 9, font: FONT_UI, bold: true });
+    drawTxt(a1, toW(t, { x: b - 5, y: -2.1 }), 0.36, rgbaOf(THEME.ink, 0.75), 'center', t.rot, { minPx: 9, font: FONT_UI, bold: true });
+    drawTxt(a2, toW(t, { x: 0.55, y: -h + 3.2 }), 0.36, rgbaOf(THEME.ink, 0.75), 'left', t.rot, { minPx: 9, font: FONT_UI, bold: true });
   } else if (t.kind === 'riga') {
     drawTxt('RIGA', toW(t, { x: t.len / 2, y: GW / 2 + 0.15 }), 0.4, 'rgba(120,80,10,0.45)', 'center', t.rot, { minPx: 9, font: FONT_UI, bold: true });
   }
@@ -637,7 +654,7 @@ function paintHandle(p, kind) {
 function paintCompass(t, sel, live) {
   const c = cgeom(t); setW(); G.setLineDash([]); G.lineCap = 'round';
   const w = Math.max(0.2, 5 / V.s);
-  G.strokeStyle = sel ? 'rgba(10,104,115,0.85)' : 'rgba(70,82,88,0.78)';
+  G.strokeStyle = sel ? rgbaOf(ACC, 0.85) : 'rgba(70,82,88,0.78)';
   G.lineWidth = w; G.beginPath(); G.moveTo(c.C.x, c.C.y); G.lineTo(c.H.x, c.H.y); G.lineTo(c.P.x, c.P.y); G.stroke();
   G.lineWidth = w * 1.3; G.beginPath(); G.moveTo(c.H.x, c.H.y); G.lineTo(c.K.x, c.K.y); G.stroke();
   G.fillStyle = sel ? ACC : '#465258'; G.beginPath(); G.arc(c.H.x, c.H.y, Math.max(0.3, 8 / V.s), 0, TAU); G.fill();
@@ -1235,7 +1252,7 @@ function moveStrokes(g, dp) {
 }
 function paintSelStrokes() {
   for (const s of selStrokes()) {
-    setW(); G.save(); G.setLineDash([]); G.strokeStyle = s.unlocked ? 'rgba(232,119,14,0.5)' : 'rgba(10,104,115,0.35)';
+    setW(); G.save(); G.setLineDash([]); G.strokeStyle = s.unlocked ? 'rgba(232,119,14,0.5)' : rgbaOf(ACC, 0.35);
     G.lineWidth = 11 / V.s; G.lineCap = 'round'; G.lineJoin = 'round'; G.beginPath();
     if (s.type === 'line') { G.moveTo(s.x1, s.y1); G.lineTo(s.x2, s.y2); }
     else if (s.type === 'arc') G.arc(s.cx, s.cy, s.r, s.a0, s.a0 + s.sw, s.sw < 0);
@@ -1523,6 +1540,8 @@ function sheetHTML() {
     <div class="empty">Con “Sì”, gli estremi dei segmenti liberi si fermano sui nodi da 0,5 cm. Le misure inserite non vengono mai arrotondate.</div></div>
   <div class="row"><span class="k">Aggancio magnetico tra strumenti</span><div class="wrap">${chip(s.magnet, 'magnet', '1', 'Attivo')}${chip(!s.magnet, 'magnet', '0', 'Spento')}</div>
     <div class="empty">Le squadre si accostano bordo contro bordo e possono scorrere una sull'altra.</div></div>
+  <div class="row"><span class="k">Colore dell'interfaccia</span><div class="wrap">${Object.entries(THEMES).map(([k, t]) => `<button class="chip ${THEME === t ? 'on' : ''}" data-a="theme" data-v="${k}"><span class="sw" style="background:${t.accent}"></span>${t.n}</button>`).join('')}</div>
+    <div class="empty">Il foglio resta bianco a quadretti: cambiano il banco, le barre e il colore delle squadre. Può essere il colore della classe.</div></div>
   <div class="row"><button class="btn primary" data-a="saveprefs">Usa queste impostazioni per le nuove tavole</button></div>
   <div class="note">I centimetri sono quelli della tavola. Il foglio si adatta allo schermo, quindi 1 cm sulla LIM non misura 1 cm reale: le proporzioni però restano esatte.</div>`;
 }
@@ -1557,6 +1576,7 @@ $('#drawerBody').addEventListener('click', e => {
     case 'cw': openNum({ title: 'Larghezza del foglio (cm)', value: s.cw, min: 5, max: 120, onOk: x => sheetChange(() => s.cw = x) }); break;
     case 'ch': openNum({ title: 'Altezza del foglio (cm)', value: s.ch, min: 5, max: 120, onOk: x => sheetChange(() => s.ch = x) }); break;
     case 'margin': openNum({ title: 'Margine della squadratura (cm)', value: s.margin, min: 0.3, max: 5, onOk: x => sheetChange(() => s.margin = x) }); break;
+    case 'theme': applyTheme(v); lsSet('tavolaviva.tema', v); renderDrawer(); draw(); break;
     case 'saveprefs': { const p = clone(s); toast(lsSet(LS.prefs, p) ? 'Impostazioni salvate come predefinite' : 'Impossibile salvare nel browser', lsSet(LS.prefs, p) ? '' : 'warn'); break; }
     case 'rename': openText({ title: 'Nome della tavola', value: D.name, onOk: x => { if (x.trim()) { D.name = x.trim(); changed(); renderDrawer(); } } }); break;
     case 'savelocal': { const bd = lsGet(LS.boards) || {}; const same = JSON.stringify(D.strokes); for (const k in bd) if (k !== D.name && k.includes(' · ') && JSON.stringify(bd[k].doc.strokes) === same) delete bd[k]; bd[D.name] = { savedAt: Date.now(), doc: clone(D) }; if (lsSet(LS.boards, bd)) toast('Tavola “' + D.name + '” salvata su questo dispositivo'); else toast('Spazio del browser esaurito: scarica il file della tavola.', 'warn'); renderDrawer(); break; }
@@ -1613,7 +1633,7 @@ function exportSteps() {
   g.fillStyle = '#1c2126'; g.font = `700 40px ${FONT_UI}`; g.textBaseline = 'middle'; g.fillText(D.name, gap, top / 2);
   S.forEach((st, i) => {
     const x = gap + (i % cols) * (tw + gap), y = top + Math.floor(i / cols) * (th + lab + gap);
-    g.fillStyle = '#0a6873'; g.font = `700 30px ${FONT_UI}`; g.textBaseline = 'middle'; g.fillText('Passaggio ' + (i + 1), x, y + lab / 2);
+    g.fillStyle = ACC; g.font = `700 30px ${FONT_UI}`; g.textBaseline = 'middle'; g.fillText('Passaggio ' + (i + 1), x, y + lab / 2);
     g.drawImage(renderToCanvas(st, k, { tools: true }), x, y + lab); g.strokeStyle = '#ccd7d5'; g.lineWidth = 2; g.strokeRect(x, y + lab, tw, th);
   });
   c.toBlob(b => b ? downloadBlob(b, safeName(D.name) + '-passaggi.png') : toast('Esportazione non riuscita', 'warn'), 'image/png');
