@@ -179,6 +179,7 @@ button{font:inherit;color:inherit}
     </div>
     <div class="sep"></div>
     <div class="grp">
+      <button class="btn" id="saveBtn" title="Salva la tavola su questo dispositivo (Ctrl+S)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/></svg>Salva</button>
       <button class="btn" id="newBtn" title="Foglio bianco nuovo: il lavoro attuale resta in Tavole"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M6 3h8l4 4v14H6z"/><path d="M12 11v6M9 14h6"/></svg>Nuovo<span class="hide-l">foglio</span></button>
       <button class="btn" id="sheetBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="1"/><rect x="6" y="8" width="12" height="8" stroke-width="1.4"/></svg>Foglio</button>
       <button class="btn" id="boardsBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 6h6l2 2h8v11H4z"/></svg>Tavole</button>
@@ -300,6 +301,26 @@ const rgbaOf = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(
 let THEME = THEMES.bosco, DESK = THEME.desk, ACC = THEME.accent;
 const PANEL_W = 132, HI = '#e8770e', SNAPC = '#2e7d4f', GUIDE = '#d6336c';
 
+// Tavole, esempi e salvataggio automatico stanno in IndexedDB: centinaia di MB invece dei ~5 MB di localStorage.
+// I dati restano in memoria (KV.mem) e ogni modifica viene scritta subito nell'archivio.
+const KV = { mem: {}, db: null };
+function idbOpen() { return new Promise(res => { try { const r = indexedDB.open('tavolaviva', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => res(null); r.onblocked = () => res(null); } catch (_) { res(null); } }); }
+function idbGet(k) { return new Promise(res => { try { const q = KV.db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(undefined); } catch (_) { res(undefined); } }); }
+async function kvLoad(keys) {
+  KV.db = await idbOpen();
+  for (const k of keys) {
+    let v = KV.db ? await idbGet(k) : undefined;
+    if (v === undefined || v === null) { const old = lsGet(k); if (old != null) { v = old; if (KV.db && kvSet(k, v)) try { localStorage.removeItem(k); } catch (_) { } } } // dati vecchi: si spostano nell'archivio nuovo
+    KV.mem[k] = v === undefined ? null : v;
+  }
+}
+const kvGet = k => KV.mem[k] == null ? null : KV.mem[k];
+function kvSet(k, v) {
+  KV.mem[k] = v;
+  if (!KV.db) return lsSet(k, v);
+  try { const tx = KV.db.transaction('kv', 'readwrite'); tx.objectStore('kv').put(v == null ? null : JSON.parse(JSON.stringify(v)), k); tx.onabort = () => toast('Salvataggio non riuscito: scarica il file della tavola per sicurezza.', 'warn'); return true; }
+  catch (_) { return lsSet(k, v); }
+}
 const lsGet = k => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } };
 function applyTheme(id) {
@@ -347,7 +368,7 @@ let saveTimer = 0, saveWarned = false;
 function changed(opts) {
   snapCache = null;
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => { rememberTools(); if (!lsSet(LS.auto, D) && !saveWarned) { saveWarned = true; toast('Salvataggio automatico non riuscito: scarica il file per sicurezza.', 'warn'); } }, 400);
+  saveTimer = setTimeout(() => { rememberTools(); if (!kvSet(LS.auto, D) && !saveWarned) { saveWarned = true; toast('Salvataggio automatico non riuscito: scarica il file per sicurezza.', 'warn'); } }, 400);
   renderTop(); renderCtx(); draw();
 }
 
@@ -1572,6 +1593,7 @@ document.addEventListener('keydown', e => {
   const mod = e.metaKey || e.ctrlKey;
   if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? doRedo() : doUndo(); return; }
   if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); doRedo(); return; }
+  if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); saveBoard(); return; }
   if (e.key === 'Escape') { if (!$('#drawer').hidden) closeDrawer(); else select(null); }
   if ((e.key === 'Delete' || e.key === 'Backspace') && selTool() && U.view < 0) { removeTool(selTool()); e.preventDefault(); }
 });
@@ -1760,8 +1782,8 @@ function sheetHTML() {
   <div class="note">I centimetri sono quelli della tavola. Il foglio si adatta allo schermo, quindi 1 cm sulla LIM non misura 1 cm reale: le proporzioni però restano esatte.</div>`;
 }
 function boardsHTML() {
-  const ex = lsGet(LS.esempi) || {}, myEx = Object.keys(ex).sort((a, b) => a.localeCompare(b, 'it'));
-  const boards = lsGet(LS.boards) || {}, names = Object.keys(boards).sort((a, b) => (boards[b].savedAt || 0) - (boards[a].savedAt || 0));
+  const ex = kvGet(LS.esempi) || {}, myEx = Object.keys(ex).sort((a, b) => a.localeCompare(b, 'it'));
+  const boards = kvGet(LS.boards) || {}, names = Object.keys(boards).sort((a, b) => (boards[b].savedAt || 0) - (boards[a].savedAt || 0));
   return `<div class="row"><span class="k">Tavola aperta</span><div class="wrap"><button class="btn" data-a="rename" style="flex:1;justify-content:flex-start;min-width:0;overflow:hidden">${esc(D.name)}</button><button class="btn primary" data-a="savelocal">Salva</button></div><div class="wrap"><button class="btn" data-a="new">Nuovo foglio bianco</button></div></div>
   <div class="row"><span class="k">Salvate su questo dispositivo</span><div class="list">${names.length ? names.map(n => `<div class="item"><span class="nm">${esc(n)}<br><span class="dt">${new Date(boards[n].savedAt || 0).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })} · ${(boards[n].doc.steps || []).length} passaggi</span></span><button class="btn" data-a="openlocal" data-v="${esc(n)}">Apri</button><button class="btn ghost" data-a="dellocal" data-v="${esc(n)}">Elimina</button></div>`).join('') : '<div class="empty">Nessuna tavola salvata.</div>'}</div></div>
   <div class="row"><span class="k">File da trasferire</span><div class="wrap"><button class="btn" data-a="download">Scarica file della tavola</button><button class="btn" data-a="openfile">Apri file…</button></div>
@@ -1771,7 +1793,7 @@ function boardsHTML() {
     ${myEx.length ? `<span class="k" style="margin-top:6px">I tuoi esempi</span><div class="list">${myEx.map(n => `<div class="item"><span class="nm">${esc(n)}<br><span class="dt">${(ex[n].steps || []).length} passaggi</span></span><button class="btn" data-a="myex" data-v="${esc(n)}">Apri</button><button class="btn ghost" data-a="delex" data-v="${esc(n)}">Elimina</button></div>`).join('')}</div>` : ''}
     <div class="wrap"><button class="btn" data-a="saveex">Salva questa tavola come esempio</button></div>
     <div class="empty">Si aprono con i passaggi già registrati. Il tuo foglio resta da parte: per ritrovarlo premi “Chiudi esempio” in alto.</div></div>
-  <div class="note warn"><b>Dati locali.</b> Il salvataggio automatico e le tavole salvate restano solo in questo browser, su questo computer. Non sono sincronizzati e si perdono se si cancellano i dati del browser. Per conservarle davvero, scarica il file della tavola.</div>
+  <div class="note warn"><b>Dati locali.</b> Il salvataggio automatico e le tavole salvate restano solo in questo browser, su questo computer (c'è spazio per moltissime tavole). Non sono sincronizzati e si perdono se si cancellano i dati del browser. Per conservarle davvero, scarica il file della tavola.</div>
   <div class="note">Nell'anteprima pubblicata su claude.ai il browser blocca i download: per scaricare file e immagini usa il file <b>Tavola-viva.html</b> aperto dal tuo computer.</div>`;
 }
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
@@ -1791,10 +1813,10 @@ $('#drawerBody').addEventListener('click', e => {
     case 'margin': openNum({ title: 'Margine della squadratura (cm)', value: s.margin, min: 0.3, max: 5, onOk: x => sheetChange(() => s.margin = x) }); break;
     case 'theme': applyTheme(v); lsSet('tavolaviva.tema', v); renderDrawer(); draw(); break;
     case 'saveprefs': { const p = clone(s); toast(lsSet(LS.prefs, p) ? 'Impostazioni salvate come predefinite' : 'Impossibile salvare nel browser', lsSet(LS.prefs, p) ? '' : 'warn'); break; }
-    case 'rename': openText({ title: 'Nome della tavola', value: D.name, onOk: x => { if (x.trim()) { D.name = x.trim(); changed(); renderDrawer(); } } }); break;
-    case 'savelocal': { const bd = lsGet(LS.boards) || {}; const same = JSON.stringify(D.strokes); for (const k in bd) if (k !== D.name && k.includes(' · ') && JSON.stringify(bd[k].doc.strokes) === same) delete bd[k]; bd[D.name] = { savedAt: Date.now(), doc: clone(D) }; if (lsSet(LS.boards, bd)) toast('Tavola “' + D.name + '” salvata su questo dispositivo'); else toast('Spazio del browser esaurito: scarica il file della tavola.', 'warn'); renderDrawer(); break; }
-    case 'openlocal': { const bd = lsGet(LS.boards) || {}; if (bd[v]) { leaveExample(); loadDoc(bd[v].doc); D.example = false; changed(); closeDrawer(); toast('Aperta “' + v + '”'); } break; }
-    case 'dellocal': confirmBox('Eliminare “' + v + '” da questo dispositivo?', 'Elimina', () => { const bd = lsGet(LS.boards) || {}; delete bd[v]; lsSet(LS.boards, bd); renderDrawer(); }); break;
+    case 'rename': openText({ title: 'Nome della tavola', value: D.name === 'Tavola senza nome' ? '' : D.name, onOk: x => { if (x.trim()) { D.name = x.trim(); changed(); renderDrawer(); } } }); break;
+    case 'savelocal': saveBoard(); renderDrawer(); break;
+    case 'openlocal': { const bd = kvGet(LS.boards) || {}; if (bd[v]) { leaveExample(); loadDoc(bd[v].doc); D.example = false; changed(); closeDrawer(); toast('Aperta “' + v + '”'); } break; }
+    case 'dellocal': confirmBox('Eliminare “' + v + '” da questo dispositivo?', 'Elimina', () => { const bd = kvGet(LS.boards) || {}; delete bd[v]; kvSet(LS.boards, bd); renderDrawer(); }); break;
     case 'download': downloadBlob(new Blob([JSON.stringify(D, null, 1)], { type: 'application/json' }), safeName(D.name) + '.json'); break;
     case 'openfile': $('#fileIn').click(); break;
     case 'pdf': exportPDF(); break;
@@ -1802,15 +1824,23 @@ $('#drawerBody').addEventListener('click', e => {
     case 'png': exportPNG(); break;
     case 'pngsteps': exportSteps(); break;
     case 'saveex': openText({ title: 'Nome dell\'esempio', value: D.name, onOk: nm => {
-      nm = nm.trim(); if (!nm) return; const ex = lsGet(LS.esempi) || {}, c = clone(D); delete c.example; delete c.exEdited; c.name = nm; ex[nm] = c;
-      if (!lsSet(LS.esempi, ex)) { toast('Spazio del browser esaurito: scarica il file della tavola.', 'warn'); return; }
+      nm = nm.trim(); if (!nm) return; const ex = kvGet(LS.esempi) || {}, c = clone(D); delete c.example; delete c.exEdited; c.name = nm; ex[nm] = c;
+      if (!kvSet(LS.esempi, ex)) { toast('Spazio del browser esaurito: scarica il file della tavola.', 'warn'); return; }
       toast(D.steps.length ? 'Esempio “' + nm + '” salvato: lo trovi in Tavole' : 'Esempio salvato senza passaggi. Registrali con “Segna passaggio” e salvalo di nuovo.', D.steps.length ? '' : 'warn'); renderDrawer(); } }); break;
-    case 'myex': { const ex = lsGet(LS.esempi) || {}; if (ex[v]) { openExampleDoc(clone(ex[v])); closeDrawer(); } break; }
-    case 'delex': confirmBox('Eliminare l\'esempio “' + v + '”?', 'Elimina', () => { const ex = lsGet(LS.esempi) || {}; delete ex[v]; lsSet(LS.esempi, ex); renderDrawer(); }); break;
+    case 'myex': { const ex = kvGet(LS.esempi) || {}; if (ex[v]) { openExampleDoc(clone(ex[v])); closeDrawer(); } break; }
+    case 'delex': confirmBox('Eliminare l\'esempio “' + v + '”?', 'Elimina', () => { const ex = kvGet(LS.esempi) || {}; delete ex[v]; kvSet(LS.esempi, ex); renderDrawer(); }); break;
     case 'sample': openExample(v); closeDrawer(); break;
     case 'new': closeDrawer(); newSheet(); break;
   }
 });
+function saveBoard() {
+  if (D.name === 'Tavola senza nome') { openText({ title: 'Nome della tavola da salvare', value: '', onOk: x => { if (x.trim()) { D.name = x.trim(); changed(); saveBoard(); if (drawerKind) renderDrawer(); } } }); return; }
+  const bd = kvGet(LS.boards) || {}, same = JSON.stringify(D.strokes);
+  for (const k in bd) if (k !== D.name && k.includes(' · ') && JSON.stringify(bd[k].doc.strokes) === same) delete bd[k]; // copie automatiche identiche
+  const c = clone(D); delete c.example; delete c.exEdited; bd[D.name] = { savedAt: Date.now(), doc: c };
+  if (kvSet(LS.boards, bd)) { if (D.example) D.example = false; renderTop(); toast('Tavola “' + D.name + '” salvata'); }
+  else toast('Salvataggio non riuscito in questo browser: scarica il file della tavola.', 'warn');
+}
 function afterSheet() {
   layout(); changed(); if (drawerKind) renderDrawer();
   const n = countOutside(D); if (n) toast(n === 1 ? 'Attenzione: 1 elemento esce dal foglio.' : 'Attenzione: ' + n + ' elementi escono dal foglio.', 'warn');
@@ -1902,36 +1932,37 @@ function exportPNG() {
 let prevDoc = null;
 function openExample(kind) { openExampleDoc(sampleDoc(kind)); }
 function openExampleDoc(doc) {
-  if (!D.example) { prevDoc = clone(D); lsSet(LS.prev, prevDoc); }
+  if (!D.example) { prevDoc = clone(D); kvSet(LS.prev, prevDoc); }
   loadDoc(doc); D.example = true; D.exEdited = false; changed();
   toast('Esempio aperto. “Passaggi” lo mostra fase per fase; “Chiudi esempio” ti riporta al tuo foglio.');
 }
-function leaveExample() { prevDoc = null; try { localStorage.removeItem(LS.prev); } catch (_) { } }
+function leaveExample() { prevDoc = null; kvSet(LS.prev, null); }
 function archive(doc, label) { // mette un foglio al sicuro nell'elenco Tavole, senza chiedere nulla
   if (!doc || !(doc.strokes || []).length) return null;
-  const bd = lsGet(LS.boards) || {};
+  const bd = kvGet(LS.boards) || {};
   for (const k in bd) if (JSON.stringify(bd[k].doc.strokes) === JSON.stringify(doc.strokes)) return k; // già salvato
   const d = new Date(), key = (label || doc.name) + ' · ' + d.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   const c = clone(doc); delete c.example; delete c.exEdited; bd[key] = { savedAt: Date.now(), doc: c };
-  return lsSet(LS.boards, bd) ? key : null;
+  return kvSet(LS.boards, bd) ? key : null;
 }
 function freshDoc(from) { const d = newDoc(); if (from && from.header) { d.header.nome = from.header.nome || ''; d.header.classe = from.header.classe || ''; } return d; }
 function backToSheet() {
   if (D.exEdited) archive(D, D.name + ' (modificato)');
-  const p = prevDoc || lsGet(LS.prev); leaveExample(); loadDoc(p && p.app === 'tavolaviva' ? p : freshDoc()); D.example = false; changed();
+  const p = prevDoc || kvGet(LS.prev); leaveExample(); loadDoc(p && p.app === 'tavolaviva' ? p : freshDoc()); D.example = false; changed();
   toast(D.strokes.length ? 'Sei tornata al tuo foglio' : 'Foglio bianco pronto');
 }
 function newSheet() {
   if (gst) return;
   let saved = null;
-  if (D.example) { if (D.exEdited) archive(D, D.name + ' (modificato)'); const p = prevDoc || lsGet(LS.prev); if (p) saved = archive(p); leaveExample(); }
+  if (D.example) { if (D.exEdited) archive(D, D.name + ' (modificato)'); const p = prevDoc || kvGet(LS.prev); if (p) saved = archive(p); leaveExample(); }
   else saved = archive(D);
-  const hd = D.example ? (prevDoc || lsGet(LS.prev) || D) : D;
+  const hd = D.example ? (prevDoc || kvGet(LS.prev) || D) : D;
   loadDoc(freshDoc(hd)); D.example = false; changed();
   toast(saved ? 'Foglio bianco pronto. Il disegno di prima è in Tavole.' : 'Foglio bianco pronto');
 }
 $('#exBack').onclick = () => { if (!gst) backToSheet(); };
 $('#newBtn').onclick = () => newSheet();
+$('#saveBtn').onclick = () => { if (!gst) saveBoard(); };
 
 /* ================= costruzioni preparate ================= */
 function sampleDoc(kind) {
@@ -2016,9 +2047,10 @@ $('#fsBtn').onclick = () => {
 /* ================= avvio ================= */
 new ResizeObserver(layout).observe(stage);
 window.addEventListener('resize', layout);
-window.addEventListener('pagehide', () => { clearTimeout(saveTimer); lsSet(LS.auto, D); });
-(function init() {
-  const a = lsGet(LS.auto);
+window.addEventListener('pagehide', () => { clearTimeout(saveTimer); kvSet(LS.auto, D); });
+(async function init() {
+  await kvLoad([LS.auto, LS.boards, LS.esempi, LS.prev]);
+  const a = kvGet(LS.auto);
   if (a && a.app === 'tavolaviva' && Array.isArray(a.strokes)) { loadDoc(a); if (a.strokes.length || a.tools.length) toast('Ripreso l\'ultimo lavoro salvato in questo browser'); }
   else {
     D = newDoc(); D.tools.push(mkTool('righello', { x: 3, y: 18, len: 20 })); D.tools.push(mkTool('compasso', { x: 18, y: 12, r: 4, ang: 0 }));
