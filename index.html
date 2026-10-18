@@ -191,6 +191,7 @@ button{font:inherit;color:inherit}
     <div class="pal-h">Azioni</div>
     <button class="pal" data-mode="sposta"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4v24M4 16h24M12 8l4-4 4 4M12 24l4 4 4-4M8 12l-4 4 4 4M24 12l4 4-4 4"/></svg>Sposta</button>
     <button class="pal" data-mode="segmento"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 25 26 7"/><circle cx="6" cy="25" r="2.4" fill="currentColor"/><circle cx="26" cy="7" r="2.4" fill="currentColor"/></svg>Segmento</button>
+    <button class="pal" data-mode="punto"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="16" cy="16" r="4" fill="currentColor"/><path d="M16 5v4M16 23v4M5 16h4M23 16h4" stroke-linecap="round"/></svg>Punto</button>
     <button class="pal" data-mode="matita"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 26l2-7L22 5l5 5-14 14z"/><path d="m19 8 5 5M6 26l7-2"/></svg>Matita</button>
     <button class="pal" data-mode="gomma"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 27 4 19 18 5l10 10-12 12z"/><path d="m10 13 10 10M12 27h16"/></svg>Gomma</button>
     <button class="pal" data-mode="lettere"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M7 26 15 6h2l8 20M10.5 18h11"/></svg>Lettere</button>
@@ -303,9 +304,9 @@ function applyTheme(id) {
 applyTheme(lsGet('tavolaviva.tema'));
 
 /* ================= documento ================= */
-const defaultSheet = () => ({ fmt: '33x24', orient: 'O', cw: 33, ch: 24, grid: true, frame: true, centri: true, margin: 1, gridSnap: true, gsv: 2, magnet: true });
-// le tavole e le preferenze salvate prima che l'aggancio ai quadretti diventasse predefinito lo attivano una volta
-const fixSheet = sh => { if (sh.gsv !== 2) { sh.gridSnap = true; sh.gsv = 2; } return sh; };
+const defaultSheet = () => ({ fmt: '33x24', orient: 'O', cw: 33, ch: 24, grid: true, frame: true, centri: true, margin: 1, gridSnap: true, stopLines: true, gsv: 3, magnet: true });
+// le tavole e le preferenze salvate prima che gli agganci diventassero predefiniti li attivano una volta
+const fixSheet = sh => { if (!(sh.gsv >= 2)) sh.gridSnap = true; if (!(sh.gsv >= 3)) sh.stopLines = true; sh.gsv = 3; return sh; };
 const SQMIN = { sq45: 22.5, sq3060: 32.5 }, SQSCALE = { sq45: 20, sq3060: 30 }, SQX0 = 0.5;
 function sheetDims(sh) {
   let w, h;
@@ -318,7 +319,7 @@ function newDoc() {
   return { app: 'tavolaviva', v: 1, name: 'Tavola senza nome', sheet: fixSheet(Object.assign(defaultSheet(), p || {})), header: { nome: '', classe: '', data: todayStr(), numero: '' }, strokes: [], tools: [], steps: [] };
 }
 let D = newDoc();
-const U = { mode: 'sposta', pen: 'HB', dash: false, sel: null, selS: [], addSel: false, lenMode: 'libera', lenVal: 10, view: -1, viewData: null, letter: 'punto', nextLetter: 'A', textSize: 0.5, hoverEdge: null };
+const U = { mode: 'sposta', pen: 'HB', dash: false, sel: null, selS: [], addSel: false, dotStyle: 'dot', dotLetter: false, lenMode: 'libera', lenVal: 10, view: -1, viewData: null, letter: 'punto', nextLetter: 'A', textSize: 0.5, hoverEdge: null };
 
 /* ================= annulla / ripristina ================= */
 let undoS = [], redoS = [];
@@ -435,7 +436,7 @@ function snapPtsOf(list) {
   const pts = [], segs = [], arcs = [];
   for (const s of list) {
     if (s.type === 'line') { pts.push({ x: s.x1, y: s.y1 }, { x: s.x2, y: s.y2 }); segs.push(s); }
-    else if (s.type === 'mark') pts.push({ x: s.x, y: s.y });
+    else if (s.type === 'mark' || s.type === 'dot') pts.push({ x: s.x, y: s.y });
     else if (s.type === 'arc') { arcs.push(s); pts.push({ x: s.cx, y: s.cy }); } // gli estremi degli archi di costruzione non sono punti notevoli: contano centri e incroci
   }
   const sh = D.sheet, dm = sheetDims(sh), m = sh.margin;
@@ -454,6 +455,36 @@ function nearestSnap(p, px) {
   return best ? { x: best.x, y: best.y } : null;
 }
 const gridSnap = p => ({ x: Math.round(p.x * 2) / 2, y: Math.round(p.y * 2) / 2 });
+// linee su cui la matita, il segmento e il punto si fermano: segmenti, circonferenze e archi, squadratura
+function stopTargets() {
+  const out = [];
+  for (const s of D.strokes) { if (s.type === 'line') out.push({ x1: s.x1, y1: s.y1, x2: s.x2, y2: s.y2 }); else if (s.type === 'arc') out.push(s); }
+  const sh = D.sheet, { w, h } = sheetDims(sh), m = sh.margin;
+  if (sh.frame && m * 2 < Math.min(w, h)) for (const [a, b, c, d] of [[m, m, w - m, m], [w - m, m, w - m, h - m], [w - m, h - m, m, h - m], [m, h - m, m, m]]) out.push({ x1: a, y1: b, x2: c, y2: d });
+  return out;
+}
+function onLines(p, px, tg) { // punto più vicino a p che sta su una linea già disegnata
+  if (!D.sheet.stopLines) return null;
+  let best = null, bd = px * (U.tf || 1) / V.s;
+  for (const t of tg || stopTargets()) {
+    let q;
+    if (t.cx !== undefined) { const v = sub(p, { x: t.cx, y: t.cy }), l = len(v); if (l < 1e-9) continue; q = add({ x: t.cx, y: t.cy }, mul(v, t.r / l)); if (!inArc(t, q)) continue; }
+    else { const a = { x: t.x1, y: t.y1 }, ab = sub({ x: t.x2, y: t.y2 }, a), l2 = dot(ab, ab); if (l2 < 1e-12) continue; q = add(a, mul(ab, clamp(dot(sub(p, a), ab) / l2, 0, 1))); }
+    const d = dist(p, q); if (d < bd) { bd = d; best = q; }
+  }
+  return best;
+}
+function crossings(a, b, tg) { // dove il tratto da a a b attraversa le linee, in ordine da a verso b
+  const seg = { x1: a.x, y1: a.y, x2: b.x, y2: b.y }, out = [];
+  for (const t of tg) { if (t.cx !== undefined) out.push(...segCirc(seg, t)); else { const q = segSeg(seg, t); if (q) out.push(q); } }
+  return out.sort((p, q) => dist(a, p) - dist(a, q));
+}
+// dove agganciare un punto toccato: punti notevoli, poi linee, poi incroci dei quadretti
+function placeSnap(p, tg) {
+  const sp = nearestSnap(p, 18); if (sp) return sp;
+  const ol = onLines(p, 16, tg); if (ol) return ol;
+  return D.sheet.gridSnap && D.sheet.grid ? gridSnap(p) : null;
+}
 function gridOnEdge(p, e) { // incrocio dei quadretti vicino a p che sta proprio sul bordo dello strumento (se lo strumento è allineato ai quadretti)
   if (!D.sheet.gridSnap || !D.sheet.grid) return null;
   const q = gridSnap(p); if (Math.abs(dot(sub(q, e.a), e.n)) > 0.02 || dist(q, p) * V.s > 26 * (U.tf || 1)) return null;
@@ -470,6 +501,7 @@ function strokeBox(s) {
   if (s.type === 'text') return [s.x, s.y - s.size, s.x + textW(s), s.y + s.size * 0.25];
   if (s.type === 'module') return [s.x, s.y, s.x + s.w, s.y + s.h];
   if (s.type === 'mark') return [s.x - s.size, s.y - s.size, s.x + s.size, s.y + s.size];
+  if (s.type === 'dot') return [s.x - 0.2, s.y - 0.2, s.x + 0.2, s.y + 0.2];
   return [0, 0, 0, 0];
 }
 function boxOf(pts) { let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity; for (const p of pts) { a = Math.min(a, p.x); b = Math.min(b, p.y); c = Math.max(c, p.x); d = Math.max(d, p.y); } return [a, b, c, d]; }
@@ -478,6 +510,7 @@ function strokeDist(s, p) {
   if (s.type === 'arc') { if (inArc(s, p)) return Math.abs(Math.hypot(p.x - s.cx, p.y - s.cy) - s.r); return Math.min(dist(p, arcPt(s, s.a0)), dist(p, arcPt(s, s.a0 + s.sw))); }
   if (s.type === 'free') { let m = Infinity; for (let i = 1; i < s.pts.length; i++) m = Math.min(m, distSeg(p, { x: s.pts[i - 1][0], y: s.pts[i - 1][1] }, { x: s.pts[i][0], y: s.pts[i][1] })); if (s.pts.length === 1) m = Math.hypot(p.x - s.pts[0][0], p.y - s.pts[0][1]); return m; }
   if (s.type === 'mark') return Math.max(0, Math.hypot(p.x - s.x, p.y - s.y) - s.size);
+  if (s.type === 'dot') return Math.max(0, Math.hypot(p.x - s.x, p.y - s.y) - 0.15);
   if (s.type === 'text' || s.type === 'module') { const b = strokeBox(s); return (p.x >= b[0] && p.x <= b[2] && p.y >= b[1] && p.y <= b[3]) ? 0 : Infinity; }
   return Infinity;
 }
@@ -539,15 +572,10 @@ function paintSheet(data, o) {
   if (o.ui) { setS(); G.save(); G.shadowColor = 'rgba(29,40,43,.28)'; G.shadowBlur = 18; G.shadowOffsetY = 4; G.fillStyle = '#fff'; G.fillRect(V.ox, V.oy, w * V.s, h * V.s); G.restore(); }
   setW(); G.fillStyle = '#fff'; G.fillRect(0, 0, w, h);
   if (sh.grid) {
-    // quadretti da 0,5 cm ben visibili; la linea del centimetro è appena più marcata (o uguale, se scelto)
-    const em = sh.gridCm !== false, thin = 1 / V.s, thick = (em ? 1.15 : 1) / V.s;
-    G.lineWidth = thin; G.strokeStyle = '#b4c6d0'; G.beginPath();
-    for (let x = 0.5; x < w - 1e-6; x += 1) { G.moveTo(x, 0); G.lineTo(x, h); }
-    for (let y = 0.5; y < h - 1e-6; y += 1) { G.moveTo(0, y); G.lineTo(w, y); }
-    G.stroke();
-    G.lineWidth = thick; G.strokeStyle = em ? '#93abb8' : '#b4c6d0'; G.beginPath();
-    for (let x = 1; x < w - 1e-6; x += 1) { G.moveTo(x, 0); G.lineTo(x, h); }
-    for (let y = 1; y < h - 1e-6; y += 1) { G.moveTo(0, y); G.lineTo(w, y); }
+    // quadretti da 0,5 cm, tutte le linee uguali come sul quaderno
+    G.lineWidth = 1 / V.s; G.strokeStyle = '#a9bfcb'; G.beginPath();
+    for (let x = 0.5; x < w - 1e-6; x += 0.5) { G.moveTo(x, 0); G.lineTo(x, h); }
+    for (let y = 0.5; y < h - 1e-6; y += 0.5) { G.moveTo(0, y); G.lineTo(w, y); }
     G.stroke();
   }
   const m = sh.margin;
@@ -588,6 +616,10 @@ function paintStroke(s) {
       G.translate(q.x, q.y); G.scale(sx, 1); G.fillStyle = PENS.HB.col; G.textAlign = 'center'; G.textBaseline = 'alphabetic'; G.fillText(s.text, 0, 0); G.restore();
     }
     return;
+  }
+  if (s.type === 'dot') { // punto: pallino pieno o crocetta
+    if (s.style === 'cross') { penStyle('HB', false); const k = 0.2; G.beginPath(); G.moveTo(s.x - k, s.y - k); G.lineTo(s.x + k, s.y + k); G.moveTo(s.x - k, s.y + k); G.lineTo(s.x + k, s.y - k); G.stroke(); return; }
+    G.fillStyle = PENS.HB.col; G.beginPath(); G.arc(s.x, s.y, Math.max(0.08, (U.lim && !U.exporting ? 5.5 : 4) / V.s), 0, TAU); G.fill(); return;
   }
   if (s.type === 'mark') { // centro di una circonferenza: crocetta
     penStyle(s.pen, false); G.beginPath(); G.moveTo(s.x - s.size, s.y); G.lineTo(s.x + s.size, s.y); G.moveTo(s.x, s.y - s.size); G.lineTo(s.x, s.y + s.size); G.stroke(); return;
@@ -825,8 +857,9 @@ function onDown(p, e) {
   // 5) strumento bloccato: solo selezione
   const lt = bodyAt(p, true);
   if (lt) { select(lt); toast('Strumento bloccato: per spostarlo tocca “Sblocca”. Puoi disegnare lungo i suoi bordi.'); return; }
-  if (U.mode === 'segmento') { const sp = nearestSnap(p, 18), a = sp || (D.sheet.gridSnap ? gridSnap(p) : p); return G0('seg', null, { a, snapPt: sp || (D.sheet.gridSnap ? a : null) }); }
-  if (U.mode === 'matita') return G0('free', null, { pts: [[r3(p.x), r3(p.y)]] });
+  if (U.mode === 'segmento') { const tg = stopTargets(), q = placeSnap(p, tg); return G0('seg', null, { a: q || p, snapPt: q, tg }); }
+  if (U.mode === 'punto') { placePoint(p); return; }
+  if (U.mode === 'matita') { const tg = stopTargets(), q = placeSnap(p, tg) || p; return G0('free', null, { pts: [[r3(q.x), r3(q.y)]], tg, start: q, snapPt: q !== p ? q : null }); }
   // modalità Sposta: intestazione o deselezione
   // modalità Sposta: toccare un segno lo seleziona; se è sbloccato si trascina
   if (U.mode === 'sposta') { const i = hitStroke(p, U.tf > 1 ? 22 : 12); if (i >= 0) return pickStroke(D.strokes[i], G0); }
@@ -929,7 +962,10 @@ function onMove(p) {
       } else {
         let u1 = clamp(cu, 0, e.L); const sp = nearestSnap(p, 16);
         const gq = gridOnEdge(p, e);
+        let xq = null; // incrocio fra il bordo e una linea già disegnata, vicino al dito
+        if (D.sheet.stopLines) { if (!g.tg) g.tg = stopTargets(); for (const q of crossings(e.a, e.b, g.tg)) if (Math.abs(dot(sub(q, e.a), e.d) - cu) * V.s < 18 * (U.tf || 1) && (!xq || dist(q, p) < dist(xq, p))) xq = q; }
         if (sp && Math.abs(dot(sub(sp, e.a), e.n)) < 0.25) { u1 = clamp(dot(sub(sp, e.a), e.d), 0, e.L); g.snapPt = sp; }
+        else if (xq) { u1 = clamp(dot(sub(xq, e.a), e.d), 0, e.L); g.snapPt = xq; }
         else if (gq) { u1 = clamp(dot(sub(gq, e.a), e.d), 0, e.L); g.snapPt = gq; }
         else { g.snapPt = null; let L = Math.round(Math.abs(u1 - g.u0) * 10) / 10; u1 = g.u0 + sg * L; if (u1 > e.L + 1e-9) u1 -= 0.1; if (u1 < -1e-9) u1 += 0.1; }
         const A = ptE(g.u0), B = ptE(u1);
@@ -943,13 +979,22 @@ function onMove(p) {
       if (U.lenMode === 'precisa') {
         const B = add(a, mul(dir, U.lenVal)); g.prev = { kind: 'line', A: a, B, len: U.lenVal, err: (!inSheet(a) || !inSheet(B)) ? 'Il segmento di ' + fmt(U.lenVal) + ' cm uscirebbe dal foglio' : null }; g.snapPt = null;
       } else {
-        const sp = nearestSnap(p, 18); let B;
-        if (sp) { B = sp; g.snapPt = sp; } else if (D.sheet.gridSnap) { B = gridSnap(p); g.snapPt = B; } else { g.snapPt = null; B = add(a, mul(dir, Math.round(len(v) * 10) / 10)); }
+        let B;
+        const q = placeSnap(p, g.tg); if (q) { B = q; g.snapPt = q; } else { g.snapPt = null; B = add(a, mul(dir, Math.round(len(v) * 10) / 10)); }
         g.prev = { kind: 'line', A: a, B, len: dist(a, B), err: null };
       }
       break;
     }
-    case 'free': { const l = g.pts[g.pts.length - 1]; if (Math.hypot(p.x - l[0], p.y - l[1]) * V.s >= 1.5) g.pts.push([r3(p.x), r3(p.y)]); g.prev = { kind: 'free', pts: g.pts }; break; }
+    case 'free': {
+      if (g.stopped) break; // ha già raggiunto una linea: il tratto finisce lì
+      const l = g.pts[g.pts.length - 1], lp = { x: l[0], y: l[1] };
+      if (Math.hypot(p.x - l[0], p.y - l[1]) * V.s >= 1.5) {
+        const hit = D.sheet.stopLines ? crossings(lp, p, g.tg).find(q => dist(q, g.start) > 0.3) : null;
+        if (hit) { g.pts.push([r3(hit.x), r3(hit.y)]); g.stopped = true; g.snapPt = hit; }
+        else { g.pts.push([r3(p.x), r3(p.y)]); g.snapPt = null; }
+      }
+      g.prev = { kind: 'free', pts: g.pts }; break;
+    }
     case 'erase': eraseAt(p); break;
     case 'smove': moveStrokes(g, dp); break;
     case 'letter': if (t) { ensureUndo(); t.x = r3(g.o0.x + dp.x); t.y = r3(g.o0.y + dp.y); snapCache = null; } break;
@@ -976,7 +1021,9 @@ function onUp(p) {
       else if (g.type === 'edge' && !g.moved) toast('Trascina lungo il bordo evidenziato per tracciare.');
       break;
     }
-    case 'free': if (g.pts.length >= 2) { pushUndo(); addStroke({ type: 'free', pts: g.pts }); changed(); } break;
+    case 'free':
+      if (!g.stopped && g.pts.length >= 2) { const l = g.pts[g.pts.length - 1], q = placeSnap({ x: l[0], y: l[1] }, g.tg); if (q) g.pts[g.pts.length - 1] = [r3(q.x), r3(q.y)]; }
+      if (g.pts.length >= 2) { pushUndo(); addStroke({ type: 'free', pts: g.pts }); changed(); } break;
     case 'erase': if (g.undone) changed(); else if (!g.moved) toast('Nessun segno da cancellare in quel punto.'); break;
     case 'smove':
       if (g.orig) changed();
@@ -1204,7 +1251,7 @@ const PENCIL = 'url("data:image/svg+xml,' + encodeURIComponent(PENCIL_SVG) + '")
 function hover(p) {
   let he = null, cur = 'default';
   if (U.mode !== 'gomma' && U.mode !== 'lettere' && !bodyAt(p, false)) he = edgeAt(p, 22 / V.s);
-  if (he) cur = PENCIL; else if (bodyAt(p, false)) cur = 'move'; else if (U.mode === 'sposta' && hitStroke(p, 12) >= 0) cur = 'pointer'; else if ((U.zoom || 1) > 1.001 && U.mode === 'sposta') cur = 'grab'; else if (U.mode === 'matita' || U.mode === 'segmento') cur = PENCIL; else if (U.mode === 'gomma') cur = 'cell';
+  if (he) cur = PENCIL; else if (bodyAt(p, false)) cur = 'move'; else if (U.mode === 'sposta' && hitStroke(p, 12) >= 0) cur = 'pointer'; else if ((U.zoom || 1) > 1.001 && U.mode === 'sposta') cur = 'grab'; else if (U.mode === 'matita' || U.mode === 'segmento') cur = PENCIL; else if (U.mode === 'punto') cur = 'crosshair'; else if (U.mode === 'gomma') cur = 'cell';
   cv.style.cursor = cur;
   if (he !== U.hoverEdge && !(he && U.hoverEdge && he.t === U.hoverEdge.t && he.i === U.hoverEdge.i)) { U.hoverEdge = he; draw(); }
 }
@@ -1212,7 +1259,7 @@ function hover(p) {
 /* ================= spostare i segni disegnati ================= */
 // I segni sono bloccati finché non si preme “Sblocca”; restano sbloccati finché non si preme “Blocca”.
 // Trascinandoli, i loro punti si agganciano agli altri punti notevoli o si allineano in orizzontale/verticale.
-const STROKENAME = { line: 'Segmento', free: 'Tratto a mano', text: 'Scritta', module: 'Modulo', mark: 'Centro' };
+const STROKENAME = { line: 'Segmento', free: 'Tratto a mano', text: 'Scritta', module: 'Modulo', mark: 'Centro', dot: 'Punto' };
 const strokeName = s => s.type === 'arc' ? (Math.abs(s.sw) >= TAU - 1e-6 ? 'Circonferenza' : 'Arco') : STROKENAME[s.type] || 'Segno';
 const selStrokes = () => U.selS.map(id => D.strokes.find(s => s.id === id)).filter(Boolean);
 function keyPts(s) {
@@ -1276,6 +1323,14 @@ function paintSelStrokes() {
     else { const b = strokeBox(s); G.lineWidth = 4 / V.s; G.rect(b[0] - 0.12, b[1] - 0.12, b[2] - b[0] + 0.24, b[3] - b[1] + 0.24); }
     G.stroke(); G.restore();
   }
+}
+
+function placePoint(p) {
+  const q = placeSnap(p) || p, at = { x: r3(q.x), y: r3(q.y) };
+  if (D.strokes.some(s => s.type === 'dot' && Math.hypot(s.x - at.x, s.y - at.y) < 0.02)) { toast('Qui c\'è già un punto'); return; }
+  pushUndo(); addStroke({ type: 'dot', x: at.x, y: at.y, style: U.dotStyle, pen: 'HB', dash: false });
+  if (U.dotLetter) { addStroke({ type: 'text', text: U.nextLetter, x: r3(at.x + 0.2), y: r3(at.y - 0.2), size: 0.5, bold: false, pen: 'HB', dash: false }); U.nextLetter = nextLetterOf(U.nextLetter); }
+  changed();
 }
 
 /* ================= lettere ================= */
@@ -1461,9 +1516,13 @@ document.querySelectorAll('.pal[data-add]').forEach(b => b.onclick = () => {
 function removeTool(t) { pushUndo(); D.tools = D.tools.filter(x => x !== t); U.sel = null; changed(); }
 
 /* ================= barra contestuale ================= */
+function snapControls() {
+  return `<div class="lbl">Quadretti</div><button class="chip ${D.sheet.gridSnap ? 'on' : ''}" data-a="gsnap">${D.sheet.gridSnap ? 'Aggancio attivo' : 'Aggancio spento'}</button>
+  <div class="lbl">Linee</div><button class="chip ${D.sheet.stopLines ? 'on' : ''}" data-a="lstop">${D.sheet.stopLines ? 'Si ferma' : 'Libera'}</button>`;
+}
 function lenControls() {
   const pre = U.lenMode === 'precisa';
-  return `<div class="lbl">Quadretti</div><button class="chip ${D.sheet.gridSnap ? 'on' : ''}" data-a="gsnap">${D.sheet.gridSnap ? 'Aggancio attivo' : 'Aggancio spento'}</button><div class="lbl">Lunghezza</div><div class="seg"><button class="btn ${pre ? '' : 'on'}" data-a="libera">Libera</button><button class="btn ${pre ? 'on' : ''}" data-a="precisa">Precisa</button></div>
+  return `${snapControls()}<div class="lbl">Lunghezza</div><div class="seg"><button class="btn ${pre ? '' : 'on'}" data-a="libera">Libera</button><button class="btn ${pre ? 'on' : ''}" data-a="precisa">Precisa</button></div>
   <div class="lbl">cm</div><button class="numbox ${pre ? '' : 'dim'}" id="lenBox" data-a="lenbox">${fmt(U.lenVal)}</button>`;
 }
 function renderCtx() {
@@ -1483,6 +1542,12 @@ function renderCtx() {
     h = `<div class="ttl">${TOOLNAME[t.kind]}</div><span class="hint">Appoggia due o tre dita per spostarlo e ruotarlo.</span>${lenControls()}<div class="lbl">Aggancio</div><button class="chip ${D.sheet.magnet ? 'on' : ''}" data-a="magnet">${D.sheet.magnet ? 'Attivo' : 'Spento'}</button>`;
   } else if (U.mode === 'segmento') {
     h = `<div class="ttl">Segmento</div>${lenControls()}`;
+  } else if (U.mode === 'matita') {
+    h = `<div class="ttl">Matita</div><span class="hint">Parte e finisce sugli incroci dei quadretti; si ferma quando raggiunge una linea.</span>${snapControls()}`;
+  } else if (U.mode === 'punto') {
+    h = `<div class="ttl">Punto</div><span class="hint">Tocca dove vuoi il punto: si aggancia a incroci, linee e quadretti.</span>
+      <div class="lbl">Segno</div><div class="g2"><button class="chip ${U.dotStyle === 'dot' ? 'on' : ''}" data-a="dotstyle" data-v="dot">● Punto</button><button class="chip ${U.dotStyle === 'cross' ? 'on' : ''}" data-a="dotstyle" data-v="cross">✕ Croce</button></div>
+      <div class="lbl">Lettera</div><button class="chip ${U.dotLetter ? 'on' : ''}" data-a="dotletter">${U.dotLetter ? 'Sì · prossima ' + esc(U.nextLetter) : 'Nessuna'}</button>${snapControls()}`;
   } else if (U.mode === 'lettere') {
     const c = (k, lbl) => `<button class="chip ${U.letter === k ? 'on' : ''}" data-l="${k}">${lbl}</button>`;
     const box = (w, hh) => `<span class="mod" style="width:${w * 11}px;height:${hh * 11}px"></span>`;
@@ -1514,6 +1579,9 @@ $('#ctxbar').addEventListener('click', e => {
     pushUndo(); addStroke({ type: 'mark', x: c.x, y: c.y, size: 0.25, dash: false }); changed(); toast('Centro segnato. Si cancella con la Gomma.');
   }
   else if (a === 'magnet') { D.sheet.magnet = !D.sheet.magnet; changed(); }
+  else if (a === 'lstop') { D.sheet.stopLines = !D.sheet.stopLines; changed(); toast(D.sheet.stopLines ? 'Matita, segmento e punto si fermano sulle linee già disegnate.' : 'Le linee non fermano più il tratto.'); }
+  else if (a === 'dotstyle') { U.dotStyle = b.dataset.v; renderCtx(); }
+  else if (a === 'dotletter') { U.dotLetter = !U.dotLetter; renderCtx(); }
   else if (a === 'gsnap') { D.sheet.gridSnap = !D.sheet.gridSnap; changed(); toast(D.sheet.gridSnap ? 'Gli estremi dei segmenti si fermano sugli incroci dei quadretti.' : 'Aggancio ai quadretti spento: segmenti liberi.'); }
   else if (a === 'lock' && t) { pushUndo(); t.locked = !t.locked; changed(); }
   else if (a === 'remove' && t) removeTool(t);
@@ -1548,8 +1616,7 @@ function sheetHTML() {
     ${s.fmt === 'custom' ? `<div class="wrap"><span>Larghezza cm</span><button class="numbox" data-a="cw">${fmt(s.cw)}</button><span>Altezza cm</span><button class="numbox" data-a="ch">${fmt(s.ch)}</button></div>` : ''}
     <div class="empty">Foglio attuale: ${fmt(d.w)} × ${fmt(d.h)} cm</div></div>
   <div class="row"><span class="k">Orientamento</span><div class="wrap">${chip(s.orient === 'O', 'orient', 'O', 'Orizzontale')}${chip(s.orient === 'V', 'orient', 'V', 'Verticale')}</div></div>
-  <div class="row"><span class="k">Griglia a quadretti da 0,5 cm</span><div class="wrap">${chip(s.grid, 'grid', '1', 'Visibile')}${chip(!s.grid, 'grid', '0', 'Foglio bianco')}</div>
-    <div class="wrap"><span>Linea del centimetro più marcata</span>${chip(s.gridCm !== false, 'gridCm', '1', 'Sì')}${chip(s.gridCm === false, 'gridCm', '0', 'No, tutte uguali')}</div></div>
+  <div class="row"><span class="k">Griglia a quadretti da 0,5 cm</span><div class="wrap">${chip(s.grid, 'grid', '1', 'Visibile')}${chip(!s.grid, 'grid', '0', 'Foglio bianco')}</div></div>
   <div class="row"><span class="k">Squadratura</span><div class="wrap">${chip(s.frame, 'frame', '1', 'Sì')}${chip(!s.frame, 'frame', '0', 'No')}<span style="margin-left:8px">Margine cm</span><button class="numbox" data-a="margin">${fmt(s.margin)}</button></div></div>
   <div class="row"><span class="k">Segni di centro sulla squadratura</span><div class="wrap">${chip(s.centri !== false, 'centri', '1', 'Sì')}${chip(s.centri === false, 'centri', '0', 'No')}</div>
     <div class="empty">Trattini a metà di ogni lato, per dividere il foglio in quattro. Il Segmento si aggancia a questi punti.</div></div>
@@ -1585,7 +1652,6 @@ $('#drawerBody').addEventListener('click', e => {
     case 'fmt': sheetChange(() => { s.fmt = v; if (v === 'custom') { const d = sheetDims(Object.assign({}, s, { fmt: '33x24' })); s.cw = s.cw || d.w; s.ch = s.ch || d.h; } }); break;
     case 'orient': sheetChange(() => s.orient = v); break;
     case 'grid': sheetChange(() => s.grid = v === '1'); break;
-    case 'gridCm': sheetChange(() => s.gridCm = v === '1'); break;
     case 'frame': sheetChange(() => s.frame = v === '1'); break;
     case 'centri': sheetChange(() => s.centri = v === '1'); break;
     case 'gridSnap': sheetChange(() => s.gridSnap = v === '1'); break;
