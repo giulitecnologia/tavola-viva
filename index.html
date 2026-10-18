@@ -595,7 +595,7 @@ function paintSheet(data, o) {
   const cap = Math.min(CAP, Math.max(m, 0.4) * 0.6), hs = cap / 0.716, yT = Math.max(m, 0.4) / 2 + cap / 2, yB = h - Math.max(m, 0.4) / 2 + cap / 2;
   const H = data.header || {}, ph = { nome: 'Nome e cognome', classe: 'Classe', data: 'Data', numero: 'Tavola n.' };
   const spots = [['nome', { x: m, y: yT }, 'left'], ['classe', { x: w - m, y: yT }, 'right'], ['data', { x: m, y: yB }, 'left'], ['numero', { x: w - m, y: yB }, 'right']];
-  for (const [k, p, al] of spots) {
+  for (const [k, p, al] of (sh.grid ? [] : spots)) { // sul foglio a quadretti niente cartigli
     const v = (H[k] || '').trim();
     if (v) drawTxt(k === 'numero' ? 'Tavola n. ' + v : v, p, hs, '#1c2126', al, 0, { minPx: 0 });
     else if (o.ui) drawTxt(ph[k] + ' …', p, hs, '#a7b4b8', al, 0, { minPx: 9 });
@@ -621,8 +621,8 @@ function paintStroke(s) {
     return;
   }
   if (s.type === 'dot') { // punto: pallino pieno o crocetta
-    if (s.style === 'cross') { penStyle('HB', false); const k = 0.2; G.beginPath(); G.moveTo(s.x - k, s.y - k); G.lineTo(s.x + k, s.y + k); G.moveTo(s.x - k, s.y + k); G.lineTo(s.x + k, s.y - k); G.stroke(); return; }
-    G.fillStyle = PENS.HB.col; G.beginPath(); G.arc(s.x, s.y, Math.max(0.08, (U.lim && !U.exporting ? 5.5 : 4) / V.s), 0, TAU); G.fill(); return;
+    if (s.style === 'cross') { penStyle('HB', false); const k = 0.12; G.beginPath(); G.moveTo(s.x - k, s.y - k); G.lineTo(s.x + k, s.y + k); G.moveTo(s.x - k, s.y + k); G.lineTo(s.x + k, s.y - k); G.stroke(); return; }
+    G.fillStyle = PENS.HB.col; G.beginPath(); G.arc(s.x, s.y, Math.max(0.04, (U.lim && !U.exporting ? 4 : 1.6) / V.s), 0, TAU); G.fill(); return;
   }
   if (s.type === 'mark') { // centro di una circonferenza: crocetta
     penStyle(s.pen, false); G.beginPath(); G.moveTo(s.x - s.size, s.y); G.lineTo(s.x + s.size, s.y); G.moveTo(s.x, s.y - s.size); G.lineTo(s.x, s.y + s.size); G.stroke(); return;
@@ -821,6 +821,7 @@ function edgeAt(p, tol) {
   return null;
 }
 function headerAt(p) {
+  if (D.sheet.grid) return null; // i cartigli ci sono solo sul foglio bianco
   const { w, h } = sheetDims(D.sheet), m = Math.max(D.sheet.margin, 0.7), bw = Math.min(10, w / 2 - 0.5);
   if (p.y >= -0.2 && p.y <= m) { if (p.x >= 0 && p.x <= bw) return 'nome'; if (p.x >= w - bw && p.x <= w) return 'classe'; }
   if (p.y >= h - m && p.y <= h + 0.2) { if (p.x >= 0 && p.x <= bw) return 'data'; if (p.x >= w - bw && p.x <= w) return 'numero'; }
