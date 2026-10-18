@@ -280,6 +280,7 @@ const FONT_TEC = '"Arial Narrow","Helvetica Neue",Arial,sans-serif';
 const FORMATS = { '33x24': { w: 33, h: 24, n: '33 × 24 cm' }, '48x33': { w: 48, h: 33, n: '48 × 33 cm' }, 'A4': { w: 29.7, h: 21, n: 'A4' }, 'A3': { w: 42, h: 29.7, n: 'A3' } };
 const PENS = { '2H': { w: 0.035, min: 1.3, col: '#7f8c98' }, 'HB': { w: 0.075, min: 2.5, col: '#1c2126' } };
 const DASH = [0.35, 0.15];
+const CAP = 0.5, TXT_EM = CAP / 0.716; // tutte le scritte alte 0,5 cm: altezza delle maiuscole (0,716 del corpo nel carattere tecnico)
 const LS = { esempi: 'tavolaviva.esempi', lim: 'tavolaviva.lim', prev: 'tavolaviva.precedente', auto: 'tavolaviva.auto', prefs: 'tavolaviva.prefs', boards: 'tavolaviva.tavole', last: 'tavolaviva.strumenti' };
 const TOOLNAME = { righello: 'Righello', riga: 'Riga', sq45: 'Squadra 45°', sq3060: 'Squadra 30°/60°', compasso: 'Compasso' };
 const RW = 3.2, GW = 2.6, CL = 8; // larghezza righello, larghezza riga, gamba del compasso (cm, scala 1)
@@ -571,6 +572,7 @@ function paintSheet(data, o) {
   const { w, h } = sheetDims(data.sheet), sh = data.sheet;
   if (o.ui) { setS(); G.save(); G.shadowColor = 'rgba(29,40,43,.28)'; G.shadowBlur = 18; G.shadowOffsetY = 4; G.fillStyle = '#fff'; G.fillRect(V.ox, V.oy, w * V.s, h * V.s); G.restore(); }
   setW(); G.fillStyle = '#fff'; G.fillRect(0, 0, w, h);
+  if (!o.ui) { G.setLineDash([]); G.lineWidth = Math.max(0.02, 1 / V.s); G.strokeStyle = '#8f9a9e'; G.strokeRect(0.01, 0.01, w - 0.02, h - 0.02); } // bordo del foglio
   if (sh.grid) {
     // quadretti da 0,5 cm, tutte le linee uguali come sul quaderno
     G.lineWidth = 1 / V.s; G.strokeStyle = '#a9bfcb'; G.beginPath();
@@ -590,13 +592,14 @@ function paintSheet(data, o) {
     }
   }
   // intestazione nei quattro angoli
-  const hs = clamp(m * 0.42, 0.22, 0.5), yT = Math.max(hs, m / 2 + hs * 0.35), yB = h - Math.max(0.12, m / 2 - hs * 0.35);
+  const cap = Math.min(CAP, Math.max(m, 0.4) * 0.6), hs = cap / 0.716, yT = Math.max(m, 0.4) / 2 + cap / 2, yB = h - Math.max(m, 0.4) / 2 + cap / 2;
   const H = data.header || {}, ph = { nome: 'Nome e cognome', classe: 'Classe', data: 'Data', numero: 'Tavola n.' };
   const spots = [['nome', { x: m, y: yT }, 'left'], ['classe', { x: w - m, y: yT }, 'right'], ['data', { x: m, y: yB }, 'left'], ['numero', { x: w - m, y: yB }, 'right']];
   for (const [k, p, al] of spots) {
     const v = (H[k] || '').trim();
     if (v) drawTxt(k === 'numero' ? 'Tavola n. ' + v : v, p, hs, '#1c2126', al, 0, { minPx: 0 });
     else if (o.ui) drawTxt(ph[k] + ' …', p, hs, '#a7b4b8', al, 0, { minPx: 9 });
+    else drawTxt(ph[k] + ' ________________', p, hs, '#6b777b', al, 0, { minPx: 0 }); // nella stampa: spazio da compilare a mano
   }
   // tratti
   setW(); G.save(); G.beginPath(); G.rect(0, 0, w, h); G.clip();
@@ -608,11 +611,11 @@ function paintStroke(s) {
   if (s.type === 'text') { drawTxt(s.text, { x: s.x, y: s.y }, s.size, PENS.HB.col, 'left', 0, { bold: s.bold }); return; }
   if (s.type === 'module') {
     G.setLineDash([]); G.lineWidth = Math.max(PENS['2H'].w, 1 / V.s); G.strokeStyle = PENS['2H'].col; G.strokeRect(s.x, s.y, s.w, s.h);
-    if (s.text) { // la scritta riempie il modulo: altezza delle maiuscole = altezza del modulo meno un piccolo margine
-      const pad = Math.min(s.w, s.h) * 0.1, th = s.h - 2 * pad, tw = s.w - 2 * pad, em = th / 0.716;
-      const q = toScr({ x: s.x + s.w / 2, y: s.y + s.h - pad });
+    if (s.text) { // scritta alta 0,5 cm, centrata nel modulo
+      const cap = Math.min(CAP, s.h), em = cap / 0.716, tw = s.w * 0.96;
+      const q = toScr({ x: s.x + s.w / 2, y: s.y + s.h / 2 + cap / 2 });
       G.save(); setS(); G.font = `${em * V.s}px ${FONT_TEC}`;
-      const mw = G.measureText(s.text).width, sx = clamp(tw * V.s / Math.max(mw, 1e-6), 0.3, 1.6);
+      const mw = G.measureText(s.text).width, sx = Math.min(1, tw * V.s / Math.max(mw, 1e-6));
       G.translate(q.x, q.y); G.scale(sx, 1); G.fillStyle = PENS.HB.col; G.textAlign = 'center'; G.textBaseline = 'alphabetic'; G.fillText(s.text, 0, 0); G.restore();
     }
     return;
@@ -1329,7 +1332,7 @@ function placePoint(p) {
   const q = placeSnap(p) || p, at = { x: r3(q.x), y: r3(q.y) };
   if (D.strokes.some(s => s.type === 'dot' && Math.hypot(s.x - at.x, s.y - at.y) < 0.02)) { toast('Qui c\'è già un punto'); return; }
   pushUndo(); addStroke({ type: 'dot', x: at.x, y: at.y, style: U.dotStyle, pen: 'HB', dash: false });
-  if (U.dotLetter) { addStroke({ type: 'text', text: U.nextLetter, x: r3(at.x + 0.2), y: r3(at.y - 0.2), size: 0.5, bold: false, pen: 'HB', dash: false }); U.nextLetter = nextLetterOf(U.nextLetter); }
+  if (U.dotLetter) { addStroke({ type: 'text', text: U.nextLetter, x: r3(at.x + 0.2), y: r3(at.y - 0.2), size: TXT_EM, bold: false, pen: 'HB', dash: false }); U.nextLetter = nextLetterOf(U.nextLetter); }
   changed();
 }
 
@@ -1338,23 +1341,28 @@ function placeLetter(p) {
   const L = U.letter;
   if (L === 'punto') {
     const sp = nearestSnap(p, 28), anc = sp || p;
-    pushUndo(); addStroke({ type: 'text', text: U.nextLetter, x: r3(anc.x + 0.2), y: r3(anc.y - 0.2), size: 0.5, bold: false, pen: 'HB', dash: false });
+    pushUndo(); addStroke({ type: 'text', text: U.nextLetter, x: r3(anc.x + 0.2), y: r3(anc.y - 0.2), size: TXT_EM, bold: false, pen: 'HB', dash: false });
     U.nextLetter = nextLetterOf(U.nextLetter); changed(); return;
   }
   const at = gridSnap(p);
-  if (L === 'testo') { openText({ title: 'Sigla o titolo', value: '', sizes: true, onOk: (v) => { if (!v.trim()) return; pushUndo(); addStroke({ type: 'text', text: v.trim(), x: at.x, y: at.y, size: U.textSize, bold: U.textSize >= 1, pen: 'HB', dash: false }); changed(); } }); return; }
-  if (['PO', 'PV', 'PL', 'LT'].includes(L)) { pushUndo(); addStroke({ type: 'text', text: L, x: at.x, y: at.y, size: 0.5, bold: false, pen: 'HB', dash: false }); changed(); return; }
+  if (L === 'testo') { openText({ title: 'Sigla, titolo o parola', value: '', onOk: (v) => { if (!v.trim()) return; pushUndo(); addStroke({ type: 'text', text: v.trim(), x: at.x, y: at.y, size: TXT_EM, bold: false, pen: 'HB', dash: false }); changed(); } }); return; }
+  if (['PO', 'PV', 'PL', 'LT'].includes(L)) { pushUndo(); addStroke({ type: 'text', text: L, x: at.x, y: at.y, size: TXT_EM, bold: false, pen: 'HB', dash: false }); changed(); return; }
   const dims = { m11: [1, 1], m21: [2, 1], m22: [2, 2] }[L];
   if (dims) {
     const tl = { x: Math.floor(p.x * 2) / 2, y: Math.floor(p.y * 2) / 2 }; pushUndo();
-    const md = { type: 'module', x: tl.x, y: tl.y, w: dims[0] * 0.5, h: dims[1] * 0.5, text: '', pen: '2H', dash: false };
+    const md = { type: 'module', x: tl.x, y: tl.y, w: dims[0] * 0.5, w0: dims[0] * 0.5, h: dims[1] * 0.5, text: '', pen: '2H', dash: false };
     addStroke(md); changed(); editModule(md, true);
   }
 }
 function nextLetterOf(s) { if (/^[A-Y]$/.test(s)) return String.fromCharCode(s.charCodeAt(0) + 1); if (s === 'Z') return 'A'; return s; }
 function editModule(md, isNew) {
   openText({ title: isNew ? 'Scrivi nel modulo (lascia vuoto per scrivere a mano con la Matita)' : 'Modifica la scritta del modulo', value: md.text || '',
-    onOk: v => { v = v.trim().slice(0, 6); if (v === (md.text || '')) return; if (!isNew) pushUndo(); md.text = v; changed(); } });
+    onOk: v => {
+      v = v.trim().slice(0, 60); if (v === (md.text || '')) return; if (!isNew) pushUndo(); md.text = v;
+      measCtx.font = `100px ${FONT_TEC}`; const need = measCtx.measureText(v).width / 100 * (Math.min(CAP, md.h) / 0.716) + 0.15;
+      md.w = Math.max(md.w0 || 0.5, Math.ceil(need * 2) / 2); // il modulo si allunga di quadretti interi finché la parola ci sta
+      changed();
+    } });
 }
 function editText(s) { openText({ title: 'Modifica scritta', value: s.text, onOk: v => { if (!v.trim()) return; pushUndo(); s.text = v.trim(); changed(); } }); }
 function editHeader(k) {
@@ -1585,7 +1593,7 @@ $('#ctxbar').addEventListener('click', e => {
   else if (a === 'gsnap') { D.sheet.gridSnap = !D.sheet.gridSnap; changed(); toast(D.sheet.gridSnap ? 'Gli estremi dei segmenti si fermano sugli incroci dei quadretti.' : 'Aggancio ai quadretti spento: segmenti liberi.'); }
   else if (a === 'lock' && t) { pushUndo(); t.locked = !t.locked; changed(); }
   else if (a === 'remove' && t) removeTool(t);
-  else if (a === 'nextletter') openText({ title: 'Prossima lettera', value: '', onOk: v => { if (v.trim()) { U.nextLetter = v.trim().slice(0, 4); renderCtx(); } } });
+  else if (a === 'nextletter') openText({ title: 'Prossima lettera', value: '', onOk: v => { if (v.trim()) { U.nextLetter = v.trim().slice(0, 12); renderCtx(); } } });
 });
 
 /* ================= passaggi ================= */
@@ -1636,7 +1644,7 @@ function boardsHTML() {
   <div class="row"><span class="k">Salvate su questo dispositivo</span><div class="list">${names.length ? names.map(n => `<div class="item"><span class="nm">${esc(n)}<br><span class="dt">${new Date(boards[n].savedAt || 0).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })} · ${(boards[n].doc.steps || []).length} passaggi</span></span><button class="btn" data-a="openlocal" data-v="${esc(n)}">Apri</button><button class="btn ghost" data-a="dellocal" data-v="${esc(n)}">Elimina</button></div>`).join('') : '<div class="empty">Nessuna tavola salvata.</div>'}</div></div>
   <div class="row"><span class="k">File da trasferire</span><div class="wrap"><button class="btn" data-a="download">Scarica file della tavola</button><button class="btn" data-a="openfile">Apri file…</button></div>
     <div class="empty">Il file (.json) contiene disegno, strumenti, impostazioni e passaggi.</div></div>
-  <div class="row"><span class="k">Immagine</span><div class="wrap"><button class="btn" data-a="png">Esporta immagine PNG</button><button class="btn" data-a="pngsteps">Esporta i passaggi in un'immagine</button></div><div class="empty">La tavola: solo foglio, intestazione e segni. I passaggi: tutte le fasi numerate in un'unica immagine, con gli strumenti nella loro posizione, da dare ai ragazzi.</div></div>
+  <div class="row"><span class="k">Scarica PDF o immagine</span><div class="wrap"><button class="btn primary" data-a="pdf">Tavola in PDF</button><button class="btn primary" data-a="pdfsteps">Passaggi in PDF</button></div><div class="wrap"><button class="btn" data-a="png">Tavola in PNG</button><button class="btn" data-a="pngsteps">Passaggi in PNG</button></div><div class="empty">La tavola: bordo del foglio, squadratura, cartigli e segni. Il PDF è in scala reale (1 cm = 1 cm). I passaggi in PDF: una pagina per passaggio, con gli strumenti nella loro posizione; in PNG: tutte le fasi in un'unica immagine.</div></div>
   <div class="row"><span class="k">Costruzioni preparate</span><div class="wrap"><button class="btn" data-a="sample" data-v="asse">Asse di un segmento</button><button class="btn" data-a="sample" data-v="triangolo">Triangolo equilatero inscritto</button><button class="btn" data-a="sample" data-v="esagono">Esagono regolare</button><button class="btn" data-a="sample" data-v="parallele">Parallele con due squadre</button></div>
     ${myEx.length ? `<span class="k" style="margin-top:6px">I tuoi esempi</span><div class="list">${myEx.map(n => `<div class="item"><span class="nm">${esc(n)}<br><span class="dt">${(ex[n].steps || []).length} passaggi</span></span><button class="btn" data-a="myex" data-v="${esc(n)}">Apri</button><button class="btn ghost" data-a="delex" data-v="${esc(n)}">Elimina</button></div>`).join('')}</div>` : ''}
     <div class="wrap"><button class="btn" data-a="saveex">Salva questa tavola come esempio</button></div>
@@ -1667,6 +1675,8 @@ $('#drawerBody').addEventListener('click', e => {
     case 'dellocal': confirmBox('Eliminare “' + v + '” da questo dispositivo?', 'Elimina', () => { const bd = lsGet(LS.boards) || {}; delete bd[v]; lsSet(LS.boards, bd); renderDrawer(); }); break;
     case 'download': downloadBlob(new Blob([JSON.stringify(D, null, 1)], { type: 'application/json' }), safeName(D.name) + '.json'); break;
     case 'openfile': $('#fileIn').click(); break;
+    case 'pdf': exportPDF(); break;
+    case 'pdfsteps': exportStepsPDF(); break;
     case 'png': exportPNG(); break;
     case 'pngsteps': exportSteps(); break;
     case 'saveex': openText({ title: 'Nome dell\'esempio', value: D.name, onOk: nm => {
@@ -1696,6 +1706,8 @@ function downloadBlob(blob, name) {
 function loadDoc(o) {
   const d = newDoc(); D = Object.assign(d, clone(o)); D.sheet = fixSheet(Object.assign(defaultSheet(), D.sheet || {})); D.header = Object.assign({ nome: '', classe: '', data: '', numero: '' }, D.header || {});
   D.steps = D.steps || []; D.tools = D.tools || []; D.strokes = D.strokes || [];
+  const fixTxt = arr => arr.forEach(x => { if (x.type === 'text') { x.size = TXT_EM; x.bold = false; } });
+  fixTxt(D.strokes); D.steps.forEach(st => fixTxt(st.strokes || []));
   const fixSq = arr => arr.forEach(t => { if (SQMIN[t.kind] && !(t.len >= SQMIN[t.kind])) t.len = SQMIN[t.kind]; });
   fixSq(D.tools); D.steps.forEach(s => fixSq(s.tools || []));
   undoS = []; redoS = []; U.view = -1; U.viewData = null; U.sel = null; U.selS = []; U.addSel = false; gst = null; U.zoom = 1; layout(); changed(); if (typeof renderView === 'function') renderView();
@@ -1720,6 +1732,44 @@ function exportSteps() {
     g.drawImage(renderToCanvas(st, k, { tools: true }), x, y + lab); g.strokeStyle = '#ccd7d5'; g.lineWidth = 2; g.strokeRect(x, y + lab, tw, th);
   });
   c.toBlob(b => b ? downloadBlob(b, safeName(D.name) + '-passaggi.png') : toast('Esportazione non riuscita', 'warn'), 'image/png');
+}
+// PDF in scala reale (1 cm = 1 cm), una pagina per immagine; scritto qui senza librerie esterne
+function jpegBytes(c) { const d = atob(c.toDataURL('image/jpeg', 0.92).split(',')[1]), u = new Uint8Array(d.length); for (let i = 0; i < d.length; i++) u[i] = d.charCodeAt(i); return u; }
+function makePDF(pages) {
+  const enc = new TextEncoder(), parts = [], offs = []; let pos = 0;
+  const put = x => { const b = typeof x === 'string' ? enc.encode(x) : x; parts.push(b); pos += b.length; };
+  const obj = (id, body) => { offs[id] = pos; put(id + ' 0 obj\n'); body(); put('\nendobj\n'); };
+  const n = pages.length, pt = cm => (cm * 72 / 2.54).toFixed(2);
+  put('%PDF-1.4\n%âãÏÓ\n');
+  obj(1, () => put('<< /Type /Catalog /Pages 2 0 R >>'));
+  obj(2, () => put(`<< /Type /Pages /Count ${n} /Kids [${pages.map((_, i) => (3 + 3 * i) + ' 0 R').join(' ')}] >>`));
+  pages.forEach((p, i) => {
+    const W = pt(p.w), H = pt(p.h), img = jpegBytes(p.c), cs = `q ${W} 0 0 ${H} 0 0 cm /Im0 Do Q`;
+    obj(3 + 3 * i, () => put(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /XObject << /Im0 ${5 + 3 * i} 0 R >> >> /Contents ${4 + 3 * i} 0 R >>`));
+    obj(4 + 3 * i, () => put(`<< /Length ${cs.length} >>\nstream\n${cs}\nendstream`));
+    obj(5 + 3 * i, () => { put(`<< /Type /XObject /Subtype /Image /Width ${p.c.width} /Height ${p.c.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${img.length} >>\nstream\n`); put(img); put('\nendstream'); });
+  });
+  const total = 3 + 3 * n, xref = pos;
+  let x = `xref\n0 ${total}\n0000000000 65535 f \n`; for (let k = 1; k < total; k++) x += String(offs[k]).padStart(10, '0') + ' 00000 n \n';
+  put(x + `trailer\n<< /Size ${total} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+  return new Blob(parts, { type: 'application/pdf' });
+}
+function exportPDF() {
+  const { w, h } = sheetDims(D.sheet), k = Math.min(80, 4000 / Math.max(w, h));
+  downloadBlob(makePDF([{ c: renderToCanvas(D, k), w, h }]), safeName(D.name) + '.pdf');
+}
+function exportStepsPDF() {
+  const S = D.steps; if (!S.length) { toast('Non ci sono passaggi: registrali con “Segna passaggio”.', 'warn'); return; }
+  toast('Preparo il PDF dei passaggi…');
+  setTimeout(() => {
+    const pages = S.map((st, i) => {
+      const { w, h } = sheetDims(st.sheet), k = Math.min(60, 3000 / Math.max(w, h)), c = renderToCanvas(st, k, { tools: true }), g = c.getContext('2d');
+      const m = Math.max(st.sheet.margin || 1, 0.6); // “Passaggio n di N” in alto al centro, nel margine
+      g.setTransform(1, 0, 0, 1, 0, 0); g.setLineDash([]); g.fillStyle = ACC; g.font = `700 ${Math.round(TXT_EM * k)}px ${FONT_UI}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('Passaggio ' + (i + 1) + ' di ' + S.length, c.width / 2, m / 2 * k);
+      return { c, w, h };
+    });
+    downloadBlob(makePDF(pages), safeName(D.name) + '-passaggi.pdf');
+  }, 30);
 }
 function exportPNG() {
   const { w, h } = sheetDims(D.sheet), s = Math.min(60, 4200 / Math.max(w, h));
@@ -1766,7 +1816,7 @@ function sampleDoc(kind) {
   const d = newDoc(); d.sheet = defaultSheet(); d.header.numero = '';
   const steps = [], line = (a, b, pen, dash) => ({ id: uid(), type: 'line', x1: r3(a.x), y1: r3(a.y), x2: r3(b.x), y2: r3(b.y), pen: pen || 'HB', dash: !!dash });
   const arc = (c, r, a0, a1, pen) => ({ id: uid(), type: 'arc', cx: c.x, cy: c.y, r, a0: a0 * DEG, sw: (a1 - a0) * DEG, pen: pen || '2H', dash: false });
-  const txt = (s, p) => ({ id: uid(), type: 'text', text: s, x: r3(p.x), y: r3(p.y), size: 0.5, bold: false, pen: 'HB', dash: false });
+  const txt = (s, p) => ({ id: uid(), type: 'text', text: s, x: r3(p.x), y: r3(p.y), size: TXT_EM, bold: false, pen: 'HB', dash: false });
   const snap = () => steps.push(clone({ id: uid(), at: Date.now(), sheet: d.sheet, header: d.header, strokes: d.strokes, tools: d.tools }));
   if (kind === 'asse') {
     d.name = 'Asse di un segmento'; const A = { x: 11, y: 15 }, B = { x: 21, y: 15 };
@@ -1859,6 +1909,6 @@ window.addEventListener('pagehide', () => { clearTimeout(saveTimer); lsSet(LS.au
 if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claude\.ai|claudeusercontent/.test(location.hostname)) navigator.serviceWorker.register('sw.js').catch(() => { });
 
 /* interfaccia di prova per le verifiche automatiche */
-window.TV = { exportSteps, setZoom, lineTargets, openExample, backToSheet, get D() { return D; }, U, get V() { return V; }, edges, cgeom, sheetDims, renderToCanvas, loadDoc, sampleDoc, snapPts };
+window.TV = { exportSteps, makePDF, exportPDF, exportStepsPDF, setZoom, lineTargets, openExample, backToSheet, get D() { return D; }, U, get V() { return V; }, edges, cgeom, sheetDims, renderToCanvas, loadDoc, sampleDoc, snapPts };
 })();
 </script></body></html>

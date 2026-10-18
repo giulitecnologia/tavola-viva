@@ -1,6 +1,6 @@
 // Tavola viva funziona anche senza internet: i file dell'app restano in memoria.
 // Con la rete disponibile si scarica sempre la versione più recente.
-const CACHE = 'tavolaviva-v2';
+const CACHE = 'tavolaviva-v3';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icone/icona-192.png', './icone/icona-512.png', './icone/icona-maskable-512.png', './icone/apple-touch-icon.png', './icone/favicon-32.png'];
 
 self.addEventListener('install', e => {
