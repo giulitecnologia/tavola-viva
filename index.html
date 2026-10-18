@@ -639,7 +639,7 @@ function paintTools(data) {
   const live = data === D && U.view < 0;
   for (const t of data.tools) {
     const sel = live && t.id === U.sel;
-    if (t.kind === 'compasso') paintCompass(t, sel, live); else paintStraight(t, sel);
+    if (t.kind === 'compasso') paintCompass(t, sel, live, data); else paintStraight(t, sel);
   }
 }
 function toolPath(t) { const p = polyL(t); G.beginPath(); p.forEach((q, i) => i ? G.lineTo(q.x, q.y) : G.moveTo(q.x, q.y)); G.closePath(); }
@@ -700,7 +700,16 @@ function paintHandle(p, kind) {
   else if (kind === 'open') { G.rotate(0); G.beginPath(); G.moveTo(-7, 0); G.lineTo(7, 0); G.moveTo(-3.5, -3.5); G.lineTo(-7, 0); G.lineTo(-3.5, 3.5); G.moveTo(3.5, -3.5); G.lineTo(7, 0); G.lineTo(3.5, 3.5); G.stroke(); }
   G.restore();
 }
-function paintCompass(t, sel, live) {
+// lettera scritta vicino a un punto (per dire “compasso aperto AO”)
+function letterAt(q, strokes) {
+  let best = null, bd = 0.9;
+  for (const s of strokes) {
+    if (s.type !== 'text' || s.text.length > 3) continue;
+    const d = dist(q, { x: s.x + textW(s) / 2, y: s.y - s.size * 0.358 }); if (d < bd) { bd = d; best = s.text; }
+  }
+  return best;
+}
+function paintCompass(t, sel, live, data) {
   const c = cgeom(t); setW(); G.setLineDash([]); G.lineCap = 'round';
   const w = Math.max(0.2, 5 / V.s);
   G.strokeStyle = sel ? rgbaOf(ACC, 0.85) : 'rgba(70,82,88,0.78)';
@@ -722,9 +731,12 @@ function paintCompass(t, sel, live) {
     if (!t.locked) paintHandle(c.O, 'open');
     if (sel && !t.locked) { paintHandle(c.K, 'rot'); paintHandle(c.Z, 'size'); }
     if (t.locked) paintLock(c.H);
-    const off = add(c.P, add(mul(c.u, 0.6 + 22 / V.s), mul(c.n, -0.2)));
-    drawTxt(fmt(t.r) + ' cm', off, 0.45, ACC, Math.cos(t.ang) < -0.3 ? 'right' : 'left', 0, { minPx: 15, font: FONT_UI, bold: true, halo: true, base: 'middle' });
   }
+  // apertura del compasso, anche nei passaggi registrati e nei file scaricati: “Compasso aperto AO = 4 cm” se i punti hanno una lettera
+  const st = data ? data.strokes : D.strokes, A = letterAt(c.C, st), B = letterAt(c.P, st), r = fmt(t.r) + ' cm';
+  const label = live ? (A && B ? A + B + ' = ' + r : r) : (A && B ? 'Compasso aperto ' + A + B + ' = ' + r : 'Apertura ' + r);
+  const off = add(c.P, add(mul(c.u, 0.6 + 22 / V.s), mul(c.n, -0.2)));
+  drawTxt(label, off, live ? 0.45 : TXT_EM * 0.8, ACC, Math.cos(t.ang) < -0.3 ? 'right' : 'left', 0, { minPx: live ? 15 : 12, font: FONT_UI, bold: true, halo: true, base: 'middle' });
 }
 
 /* ---------- elementi temporanei ---------- */
@@ -1340,8 +1352,9 @@ function placePoint(p) {
 function placeLetter(p) {
   const L = U.letter;
   if (L === 'punto') {
-    const sp = nearestSnap(p, 28), anc = sp || p;
-    pushUndo(); addStroke({ type: 'text', text: U.nextLetter, x: r3(anc.x + 0.2), y: r3(anc.y - 0.2), size: TXT_EM, bold: false, pen: 'HB', dash: false });
+    // la lettera compare esattamente dove si tocca, centrata sul dito
+    const lt = { text: U.nextLetter, size: TXT_EM, bold: false };
+    pushUndo(); addStroke({ type: 'text', text: U.nextLetter, x: r3(p.x - textW(lt) / 2), y: r3(p.y + CAP / 2), size: TXT_EM, bold: false, pen: 'HB', dash: false });
     U.nextLetter = nextLetterOf(U.nextLetter); changed(); return;
   }
   const at = gridSnap(p);
@@ -1559,7 +1572,7 @@ function renderCtx() {
   } else if (U.mode === 'lettere') {
     const c = (k, lbl) => `<button class="chip ${U.letter === k ? 'on' : ''}" data-l="${k}">${lbl}</button>`;
     const box = (w, hh) => `<span class="mod" style="width:${w * 11}px;height:${hh * 11}px"></span>`;
-    h = `<div class="ttl">Lettere</div>${c('punto', 'Punti')}${U.letter === 'punto' ? `<span class="hint">Tocca vicino a un vertice. Prossima:</span><button class="numbox" data-a="nextletter">${U.nextLetter}</button>` : ''}
+    h = `<div class="ttl">Lettere</div>${c('punto', 'Punti')}${U.letter === 'punto' ? `<span class="hint">Tocca dove vuoi la lettera. Prossima:</span><button class="numbox" data-a="nextletter">${U.nextLetter}</button>` : ''}
       ${c('testo', 'Sigla / titolo')}<div class="g2">${c('PO', 'PO')}${c('PV', 'PV')}${c('PL', 'PL')}${c('LT', 'LT')}</div>
       <div class="lbl">Moduli</div><button class="chip ${U.letter === 'm11' ? 'on' : ''}" data-l="m11" title="1 × 1 quadretti">${box(1, 1)}1×1</button><button class="chip ${U.letter === 'm21' ? 'on' : ''}" data-l="m21" title="2 × 1 quadretti">${box(2, 1)}2×1</button><button class="chip ${U.letter === 'm22' ? 'on' : ''}" data-l="m22" title="2 × 2 quadretti">${box(2, 2)}2×2</button>`;
   } else if (U.mode === 'gomma') {
