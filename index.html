@@ -303,7 +303,9 @@ function applyTheme(id) {
 applyTheme(lsGet('tavolaviva.tema'));
 
 /* ================= documento ================= */
-const defaultSheet = () => ({ fmt: '33x24', orient: 'O', cw: 33, ch: 24, grid: true, frame: true, centri: true, margin: 1, gridSnap: false, magnet: true });
+const defaultSheet = () => ({ fmt: '33x24', orient: 'O', cw: 33, ch: 24, grid: true, frame: true, centri: true, margin: 1, gridSnap: true, gsv: 2, magnet: true });
+// le tavole e le preferenze salvate prima che l'aggancio ai quadretti diventasse predefinito lo attivano una volta
+const fixSheet = sh => { if (sh.gsv !== 2) { sh.gridSnap = true; sh.gsv = 2; } return sh; };
 const SQMIN = { sq45: 22.5, sq3060: 32.5 }, SQSCALE = { sq45: 20, sq3060: 30 }, SQX0 = 0.5;
 function sheetDims(sh) {
   let w, h;
@@ -313,7 +315,7 @@ function sheetDims(sh) {
 }
 function newDoc() {
   const p = lsGet(LS.prefs);
-  return { app: 'tavolaviva', v: 1, name: 'Tavola senza nome', sheet: Object.assign(defaultSheet(), p || {}), header: { nome: '', classe: '', data: todayStr(), numero: '' }, strokes: [], tools: [], steps: [] };
+  return { app: 'tavolaviva', v: 1, name: 'Tavola senza nome', sheet: fixSheet(Object.assign(defaultSheet(), p || {})), header: { nome: '', classe: '', data: todayStr(), numero: '' }, strokes: [], tools: [], steps: [] };
 }
 let D = newDoc();
 const U = { mode: 'sposta', pen: 'HB', dash: false, sel: null, selS: [], addSel: false, lenMode: 'libera', lenVal: 10, view: -1, viewData: null, letter: 'punto', nextLetter: 'A', textSize: 0.5, hoverEdge: null };
@@ -452,6 +454,11 @@ function nearestSnap(p, px) {
   return best ? { x: best.x, y: best.y } : null;
 }
 const gridSnap = p => ({ x: Math.round(p.x * 2) / 2, y: Math.round(p.y * 2) / 2 });
+function gridOnEdge(p, e) { // incrocio dei quadretti vicino a p che sta proprio sul bordo dello strumento (se lo strumento è allineato ai quadretti)
+  if (!D.sheet.gridSnap || !D.sheet.grid) return null;
+  const q = gridSnap(p); if (Math.abs(dot(sub(q, e.a), e.n)) > 0.02 || dist(q, p) * V.s > 26 * (U.tf || 1)) return null;
+  return q;
+}
 
 /* ================= tratti ================= */
 const measCtx = document.createElement('canvas').getContext('2d');
@@ -812,13 +819,13 @@ function onDown(p, e) {
   const ed = edgeAt(p, tolE);
   if (ed) {
     let u = dot(sub(p, ed.a), ed.d);
-    const sp = nearestSnap(p, 18); if (sp && Math.abs(dot(sub(sp, ed.a), ed.n)) < 0.25) u = dot(sub(sp, ed.a), ed.d);
+    const sp = nearestSnap(p, 18), gq = gridOnEdge(p, ed); if (sp && Math.abs(dot(sub(sp, ed.a), ed.n)) < 0.25) u = dot(sub(sp, ed.a), ed.d); else if (gq) u = dot(sub(gq, ed.a), ed.d);
     return G0('edge', ed, { u0: clamp(u, 0, ed.L) });
   }
   // 5) strumento bloccato: solo selezione
   const lt = bodyAt(p, true);
   if (lt) { select(lt); toast('Strumento bloccato: per spostarlo tocca “Sblocca”. Puoi disegnare lungo i suoi bordi.'); return; }
-  if (U.mode === 'segmento') { let a = nearestSnap(p, 18) || (D.sheet.gridSnap ? gridSnap(p) : p); return G0('seg', null, { a, snapPt: nearestSnap(p, 18) }); }
+  if (U.mode === 'segmento') { const sp = nearestSnap(p, 18), a = sp || (D.sheet.gridSnap ? gridSnap(p) : p); return G0('seg', null, { a, snapPt: sp || (D.sheet.gridSnap ? a : null) }); }
   if (U.mode === 'matita') return G0('free', null, { pts: [[r3(p.x), r3(p.y)]] });
   // modalità Sposta: intestazione o deselezione
   // modalità Sposta: toccare un segno lo seleziona; se è sbloccato si trascina
@@ -921,7 +928,9 @@ function onMove(p) {
         g.prev = { kind: 'line', A, B, len: L, err };
       } else {
         let u1 = clamp(cu, 0, e.L); const sp = nearestSnap(p, 16);
+        const gq = gridOnEdge(p, e);
         if (sp && Math.abs(dot(sub(sp, e.a), e.n)) < 0.25) { u1 = clamp(dot(sub(sp, e.a), e.d), 0, e.L); g.snapPt = sp; }
+        else if (gq) { u1 = clamp(dot(sub(gq, e.a), e.d), 0, e.L); g.snapPt = gq; }
         else { g.snapPt = null; let L = Math.round(Math.abs(u1 - g.u0) * 10) / 10; u1 = g.u0 + sg * L; if (u1 > e.L + 1e-9) u1 -= 0.1; if (u1 < -1e-9) u1 += 0.1; }
         const A = ptE(g.u0), B = ptE(u1);
         g.prev = { kind: 'line', A, B, len: Math.abs(u1 - g.u0), err: null };
@@ -935,7 +944,7 @@ function onMove(p) {
         const B = add(a, mul(dir, U.lenVal)); g.prev = { kind: 'line', A: a, B, len: U.lenVal, err: (!inSheet(a) || !inSheet(B)) ? 'Il segmento di ' + fmt(U.lenVal) + ' cm uscirebbe dal foglio' : null }; g.snapPt = null;
       } else {
         const sp = nearestSnap(p, 18); let B;
-        if (sp) { B = sp; g.snapPt = sp; } else { g.snapPt = null; B = D.sheet.gridSnap ? gridSnap(p) : add(a, mul(dir, Math.round(len(v) * 10) / 10)); }
+        if (sp) { B = sp; g.snapPt = sp; } else if (D.sheet.gridSnap) { B = gridSnap(p); g.snapPt = B; } else { g.snapPt = null; B = add(a, mul(dir, Math.round(len(v) * 10) / 10)); }
         g.prev = { kind: 'line', A: a, B, len: dist(a, B), err: null };
       }
       break;
@@ -1454,7 +1463,7 @@ function removeTool(t) { pushUndo(); D.tools = D.tools.filter(x => x !== t); U.s
 /* ================= barra contestuale ================= */
 function lenControls() {
   const pre = U.lenMode === 'precisa';
-  return `<div class="lbl">Lunghezza</div><div class="seg"><button class="btn ${pre ? '' : 'on'}" data-a="libera">Libera</button><button class="btn ${pre ? 'on' : ''}" data-a="precisa">Precisa</button></div>
+  return `<div class="lbl">Quadretti</div><button class="chip ${D.sheet.gridSnap ? 'on' : ''}" data-a="gsnap">${D.sheet.gridSnap ? 'Aggancio attivo' : 'Aggancio spento'}</button><div class="lbl">Lunghezza</div><div class="seg"><button class="btn ${pre ? '' : 'on'}" data-a="libera">Libera</button><button class="btn ${pre ? 'on' : ''}" data-a="precisa">Precisa</button></div>
   <div class="lbl">cm</div><button class="numbox ${pre ? '' : 'dim'}" id="lenBox" data-a="lenbox">${fmt(U.lenVal)}</button>`;
 }
 function renderCtx() {
@@ -1505,6 +1514,7 @@ $('#ctxbar').addEventListener('click', e => {
     pushUndo(); addStroke({ type: 'mark', x: c.x, y: c.y, size: 0.25, dash: false }); changed(); toast('Centro segnato. Si cancella con la Gomma.');
   }
   else if (a === 'magnet') { D.sheet.magnet = !D.sheet.magnet; changed(); }
+  else if (a === 'gsnap') { D.sheet.gridSnap = !D.sheet.gridSnap; changed(); toast(D.sheet.gridSnap ? 'Gli estremi dei segmenti si fermano sugli incroci dei quadretti.' : 'Aggancio ai quadretti spento: segmenti liberi.'); }
   else if (a === 'lock' && t) { pushUndo(); t.locked = !t.locked; changed(); }
   else if (a === 'remove' && t) removeTool(t);
   else if (a === 'nextletter') openText({ title: 'Prossima lettera', value: '', onOk: v => { if (v.trim()) { U.nextLetter = v.trim().slice(0, 4); renderCtx(); } } });
@@ -1544,7 +1554,7 @@ function sheetHTML() {
   <div class="row"><span class="k">Segni di centro sulla squadratura</span><div class="wrap">${chip(s.centri !== false, 'centri', '1', 'Sì')}${chip(s.centri === false, 'centri', '0', 'No')}</div>
     <div class="empty">Trattini a metà di ogni lato, per dividere il foglio in quattro. Il Segmento si aggancia a questi punti.</div></div>
   <div class="row"><span class="k">Aggancio alla griglia</span><div class="wrap">${chip(s.gridSnap, 'gridSnap', '1', 'Sì')}${chip(!s.gridSnap, 'gridSnap', '0', 'No')}</div>
-    <div class="empty">Con “Sì”, gli estremi dei segmenti liberi si fermano sui nodi da 0,5 cm. Le misure inserite non vengono mai arrotondate.</div></div>
+    <div class="empty">Con “Sì”, gli estremi dei segmenti e delle linee tracciate lungo gli strumenti si fermano sugli incroci dei quadretti (ogni 0,5 cm). Le misure inserite non vengono mai arrotondate.</div></div>
   <div class="row"><span class="k">Aggancio magnetico tra strumenti</span><div class="wrap">${chip(s.magnet, 'magnet', '1', 'Attivo')}${chip(!s.magnet, 'magnet', '0', 'Spento')}</div>
     <div class="empty">Le squadre si accostano bordo contro bordo e possono scorrere una sull'altra.</div></div>
   <div class="row"><span class="k">Colore dell'interfaccia</span><div class="wrap">${Object.entries(THEMES).map(([k, t]) => `<button class="chip ${THEME === t ? 'on' : ''}" data-a="theme" data-v="${k}"><span class="sw" style="background:${t.accent}"></span>${t.n}</button>`).join('')}</div>
@@ -1618,7 +1628,7 @@ function downloadBlob(blob, name) {
   catch (_) { toast('Download non riuscito in questa finestra.', 'warn'); }
 }
 function loadDoc(o) {
-  const d = newDoc(); D = Object.assign(d, clone(o)); D.sheet = Object.assign(defaultSheet(), D.sheet || {}); D.header = Object.assign({ nome: '', classe: '', data: '', numero: '' }, D.header || {});
+  const d = newDoc(); D = Object.assign(d, clone(o)); D.sheet = fixSheet(Object.assign(defaultSheet(), D.sheet || {})); D.header = Object.assign({ nome: '', classe: '', data: '', numero: '' }, D.header || {});
   D.steps = D.steps || []; D.tools = D.tools || []; D.strokes = D.strokes || [];
   const fixSq = arr => arr.forEach(t => { if (SQMIN[t.kind] && !(t.len >= SQMIN[t.kind])) t.len = SQMIN[t.kind]; });
   fixSq(D.tools); D.steps.forEach(s => fixSq(s.tools || []));
