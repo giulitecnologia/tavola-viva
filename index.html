@@ -349,7 +349,7 @@ function newDoc() {
 let D = newDoc();
 const COLORS = [['Rosso', '#e53935'], ['Arancio', '#fb8c00'], ['Giallo', '#fdd835'], ['Verde', '#43a047'], ['Azzurro', '#29b6f6'], ['Blu', '#1e66c9'], ['Viola', '#8e44ad'], ['Marrone', '#8d5a3b'], ['Grigio', '#8a9399']];
 const COLPREF = 'tavolaviva.colore';
-const U = { col: Object.assign({ mode: 'fill', color: '#29b6f6', alpha: 0.5, bw: 0.6, all: false }, (() => { try { return JSON.parse(localStorage.getItem(COLPREF)) || {}; } catch (_) { return {}; } })()), mode: 'sposta', pen: 'HB', dash: false, sel: null, selS: [], addSel: false, dotStyle: 'dot', dotLetter: false, lenMode: 'libera', lenVal: 10, view: -1, viewData: null, letter: 'punto', nextLetter: 'A', textSize: 0.5, hoverEdge: null };
+const U = { cg: null, radii: (() => { try { return JSON.parse(localStorage.getItem('tavolaviva.raggi')) || []; } catch (_) { return []; } })(), col: Object.assign({ mode: 'fill', color: '#29b6f6', alpha: 0.5, bw: 0.6, all: false }, (() => { try { return JSON.parse(localStorage.getItem(COLPREF)) || {}; } catch (_) { return {}; } })()), mode: 'sposta', pen: 'HB', dash: false, sel: null, selS: [], addSel: false, dotStyle: 'dot', dotLetter: false, lenMode: 'libera', lenVal: 10, view: -1, viewData: null, letter: 'punto', nextLetter: 'A', textSize: 0.5, hoverEdge: null };
 
 /* ================= annulla / ripristina ================= */
 let undoS = [], redoS = [];
@@ -417,6 +417,14 @@ function cgeom(t) {
   return { C, P, H, K, O, Z, u, n, l };
 }
 const cmaxR = t => 2 * CL * t.s * 0.97;
+function setOpen(t, p, g) { // apre il compasso fino al punto toccato (agganciandosi a punti, linee e quadretti)
+  const q = placeSnap(p) || p; let r = Math.hypot(q.x - t.x, q.y - t.y); if (r < 0.2) return;
+  if (q === p) r = Math.round(r * 10) / 10;
+  t.r = clamp(r3(r), 0.2, 60); t.ang = Math.atan2(q.y - t.y, q.x - t.x); if (cmaxR(t) < t.r) t.s = Math.min(3.2, t.r / (2 * CL * 0.97));
+  if (g) g.snapPt = q !== p ? q : null; updateCtxValue();
+}
+function setRadius(t, v) { t.r = v; if (cmaxR(t) < v) t.s = Math.min(3.2, v / (2 * CL * 0.97)); if (U.cg && U.cg.id === t.id && (U.cg.phase === 'center' || U.cg.phase === 'open')) U.cg.phase = 'trace'; }
+function rememberRadius(r) { U.radii = [r, ...U.radii.filter(x => Math.abs(x - r) > 1e-6)].slice(0, 4); try { localStorage.setItem('tavolaviva.raggi', JSON.stringify(U.radii)); } catch (_) { } }
 function rotateAbout(t, pivot, da) { const o = add(pivot, rotV(sub({ x: t.x, y: t.y }, pivot), da)); t.x = o.x; t.y = o.y; t.rot += da; }
 function mkTool(kind, o) {
   const base = { id: uid(), kind, x: 0, y: 0, rot: 0, locked: false };
@@ -768,8 +776,9 @@ function paintCompass(t, sel, live, data) {
   if (live) {
     // maniglia della punta (tracciare) e di apertura
     const q = toScr(c.P); setS(); G.save(); G.strokeStyle = HI; G.lineWidth = 2.5; G.setLineDash([4, 3]); G.beginPath(); G.arc(q.x, q.y, 18, 0, TAU); G.stroke(); G.restore();
-    if (!t.locked) paintHandle(c.O, 'open');
-    if (sel && !t.locked) { paintHandle(c.K, 'rot'); paintHandle(c.Z, 'size'); }
+    const guided = U.cg && U.cg.id === t.id; // nella modalità guidata le maniglie non servono
+    if (!t.locked && !guided) paintHandle(c.O, 'open');
+    if (sel && !t.locked && !guided) { paintHandle(c.K, 'rot'); paintHandle(c.Z, 'size'); }
     if (t.locked) paintLock(c.H);
   }
   // apertura del compasso, anche nei passaggi registrati e nei file scaricati: “Compasso aperto AO = 4 cm” se i punti hanno una lettera
@@ -842,7 +851,9 @@ let gst = null, activeId = null;
 function evPt(e) { const r = cv.getBoundingClientRect(); const sx = e.clientX - r.left, sy = e.clientY - r.top; return { x: (sx - V.ox) / V.s, y: (sy - V.oy) / V.s }; }
 function ensureUndo() { if (!gst.undone) { pushUndo(); gst.undone = true; } }
 function bringFront(t) { const i = D.tools.indexOf(t); if (i >= 0 && i < D.tools.length - 1) { D.tools.splice(i, 1); D.tools.push(t); } }
-function select(t) { const id = t ? t.id : null, had = U.selS.length; U.selS = []; if (!t) U.addSel = false; if (U.sel !== id || had) { U.sel = id; renderCtx(); } draw(); }
+function select(t) {
+  if (t && t.kind === 'compasso') { if (!U.cg || U.cg.id !== t.id) U.cg = { id: t.id, phase: 'trace' }; } else U.cg = null;
+  const id = t ? t.id : null, had = U.selS.length; U.selS = []; if (!t) U.addSel = false; if (U.sel !== id || had) { U.sel = id; renderCtx(); } draw(); }
 
 function bodyAt(p, wantLocked) {
   for (let k = D.tools.length - 1; k >= 0; k--) { const t = D.tools[k]; if (!!t.locked !== !!wantLocked) continue; if (insideTool(t, p, 3 / V.s)) return t; }
@@ -875,6 +886,16 @@ function onDown(p, e) {
   const tolH = (e.pointerType === 'mouse' ? 20 : 34) / V.s, tolE = (e.pointerType === 'mouse' ? 22 : 30) / V.s;
   const st = selTool();
   const G0 = (type, obj, extra) => { gst = Object.assign({ type, obj, p0: p, last: p, moved: false, undone: false, t0: performance.now() }, extra || {}); draw(); };
+  // 0) compasso guidato: 1 punta l'ago, 2 apri, 3 traccia trascinando il dito ovunque
+  const gc = U.cg && U.mode === 'sposta' && st && st.kind === 'compasso' && st.id === U.cg.id ? st : null, ob = gc && bodyAt(p, false);
+  if (gc && !(ob && ob !== gc)) {
+    const ph = U.cg.phase;
+    if ((ph === 'center' || ph === 'open') && gc.locked) { toast('Compasso bloccato: tocca “Sblocca” per spostarlo o aprirlo.'); return; }
+    if (ph === 'center') return G0('gcenter', gc);
+    if (ph === 'open') return G0('gopen', gc);
+    if (ph === 'arcA' || ph === 'arcB') return G0('garc', gc);
+    return G0('trace', gc, { a0: gc.ang, prevA: Math.atan2(p.y - gc.y, p.x - gc.x), sw: 0, anywhere: true });
+  }
   // 1) maniglie dello strumento selezionato
   if (st && !st.locked) {
     if (st.kind === 'compasso') {
@@ -1001,7 +1022,10 @@ function onMove(p) {
       t.r = clamp(nr, 0.2, 60); updateCtxValue();
       break;
     }
+    case 'gcenter': { ensureUndo(); const q = placeSnap(p) || p; t.x = r3(q.x); t.y = r3(q.y); g.snapPt = q !== p ? q : null; break; }
+    case 'gopen': { ensureUndo(); setOpen(t, p, g); break; }
     case 'trace': {
+      if (g.anywhere && Math.hypot(p.x - t.x, p.y - t.y) < 0.4) break; // troppo vicino all'ago: l'angolo non è affidabile
       ensureUndo(); const a = Math.atan2(p.y - t.y, p.x - t.x);
       g.sw = clamp(g.sw + normAng(a - g.prevA), -TAU, TAU); g.prevA = a; t.ang = g.a0 + g.sw;
       g.prev = { kind: 'arc', cx: t.x, cy: t.y, r: t.r, a0: g.a0, sw: g.sw };
@@ -1068,9 +1092,24 @@ function onUp(p) {
     case 'pan': if (!g.moved) { if (g.hk) editHeader(g.hk); else select(null); } break;
     case 'move': if (g.moved && t.kind === 'compasso') { t.x = r3(t.x); t.y = r3(t.y); } if (g.moved) changed(); break;
     case 'rot': case 'size': case 'crot': case 'cres': case 'open': if (g.moved) changed(); break;
+    case 'gcenter': {
+      if (!g.moved) { if (!g.undone) pushUndo(); const q = placeSnap(p) || p; t.x = r3(q.x); t.y = r3(q.y); }
+      U.cg.phase = 'open'; changed(); toast('Ora tocca dove aprire il compasso, oppure scrivi la misura.'); break;
+    }
+    case 'gopen': {
+      if (!g.moved) { if (!g.undone) pushUndo(); setOpen(t, p); }
+      U.cg.phase = 'trace'; changed(); toast('Ora trascina il dito in qualsiasi punto per tracciare.'); break;
+    }
+    case 'garc': {
+      const q = placeSnap(p) || p, a = Math.atan2(q.y - t.y, q.x - t.x);
+      if (U.cg.phase === 'arcA') { U.cg.a = a; U.cg.phase = 'arcB'; t.ang = a; renderCtx(); toast('Ora tocca dove finisce l’arco.'); break; }
+      const sw = normAng(a - U.cg.a); if (Math.abs(sw) < 0.01) { toast('Tocca un punto diverso da quello di partenza.'); break; }
+      pushUndo(); D.strokes.push({ id: uid(), type: 'arc', cx: t.x, cy: t.y, r: t.r, a0: U.cg.a, sw, pen: U.pen, dash: U.dash });
+      t.ang = a; U.cg.phase = 'trace'; rememberRadius(t.r); changed(); break;
+    }
     case 'trace':
-      if (g.moved && Math.abs(g.sw) > 0.01) { let sw = g.sw; if (Math.abs(sw) >= TAU - 0.02) sw = Math.sign(sw) * TAU; D.strokes.push({ id: uid(), type: 'arc', cx: t.x, cy: t.y, r: t.r, a0: g.a0, sw, pen: U.pen, dash: U.dash }); changed(); }
-      else if (!g.moved) toast('Trascina la punta della matita intorno al centro per tracciare un arco.');
+      if (g.moved && Math.abs(g.sw) > 0.01) { let sw = g.sw; if (Math.abs(sw) >= TAU - 0.02) sw = Math.sign(sw) * TAU; D.strokes.push({ id: uid(), type: 'arc', cx: t.x, cy: t.y, r: t.r, a0: g.a0, sw, pen: U.pen, dash: U.dash }); rememberRadius(t.r); changed(); }
+      else if (!g.moved) toast(g.anywhere ? 'Trascina il dito intorno all’ago per tracciare: puoi partire da qualsiasi punto.' : 'Trascina la punta della matita intorno al centro per tracciare un arco.');
       else changed();
       break;
     case 'edge': case 'seg': {
@@ -1226,7 +1265,7 @@ function toolNear(p) {
 function gestureTool(g) {
   if (!g || !g.obj) return null;
   if (g.type === 'edge') return g.obj.t;
-  return ['move', 'rot', 'size', 'crot', 'cres', 'open', 'trace'].includes(g.type) ? g.obj : null;
+  return ['move', 'rot', 'size', 'crot', 'cres', 'open', 'trace', 'gcenter', 'gopen', 'garc'].includes(g.type) ? g.obj : null;
 }
 const poseOf = t => ({ x: t.x, y: t.y, a: t.kind === 'compasso' ? t.ang : t.rot });
 function setPose(t, o) { t.x = o.x; t.y = o.y; if (t.kind === 'compasso') t.ang = o.a; else t.rot = o.a; }
@@ -1624,7 +1663,7 @@ $('#pen2H').onclick = () => { U.pen = '2H'; renderTop(); draw(); };
 $('#penHB').onclick = () => { U.pen = 'HB'; renderTop(); draw(); };
 $('#dashBtn').onclick = () => { U.dash = !U.dash; renderTop(); };
 $('#undoBtn').onclick = doUndo; $('#redoBtn').onclick = doRedo;
-document.querySelectorAll('.pal[data-mode]').forEach(b => b.onclick = () => { if (U.view >= 0) return toast('Premi “Riprendi disegno” per tornare a disegnare.'); U.mode = b.dataset.mode; U.selS = []; U.addSel = false; if (['gomma', 'lettere', 'colore', 'punto'].includes(U.mode)) U.sel = null; renderTop(); renderCtx(); draw(); });
+document.querySelectorAll('.pal[data-mode]').forEach(b => b.onclick = () => { if (U.view >= 0) return toast('Premi “Riprendi disegno” per tornare a disegnare.'); U.mode = b.dataset.mode; U.selS = []; U.cg = null; U.addSel = false; if (['gomma', 'lettere', 'colore', 'punto'].includes(U.mode)) U.sel = null; renderTop(); renderCtx(); draw(); });
 // ogni strumento ricompare dove e come è stato usato l'ultima volta (posizione, rotazione, apertura del compasso)
 const TOOLKEYS = { compasso: ['x', 'y', 'ang', 'r', 's'], other: ['x', 'y', 'rot', 'len'] };
 function rememberTools() {
@@ -1649,7 +1688,8 @@ document.querySelectorAll('.pal[data-add]').forEach(b => b.onclick = () => {
   }
   // se lo stesso strumento è già lì, il nuovo compare un po' spostato per non coprirlo
   if (D.tools.some(o => o.kind === kind && Math.hypot(o.x - t.x, o.y - t.y) < 0.6)) { t.x += 1.2 + off; t.y -= 1.2 + off; }
-  pushUndo(); D.tools.push(t); U.sel = t.id; if (U.mode === 'gomma' || U.mode === 'lettere') U.mode = 'sposta';
+  pushUndo(); D.tools.push(t); U.sel = t.id; U.mode = 'sposta'; U.cg = kind === 'compasso' ? { id: t.id, phase: 'center' } : null;
+  if (kind === 'compasso') toast('Compasso: tocca dove puntare l’ago.');
   changed();
 });
 function removeTool(t) { pushUndo(); D.tools = D.tools.filter(x => x !== t); U.sel = null; changed(); }
@@ -1676,7 +1716,12 @@ function renderCtx() {
       <button class="chip ${lk ? '' : 'on'}" data-a="slock">${lockIcon(lk)}${lk ? 'Sblocca' : 'Blocca'}</button><div class="sp"></div>
       <button class="chip ${U.addSel ? 'on' : ''}" data-a="addsel">Seleziona altri</button><button class="chip" data-a="selall">Seleziona tutto</button><button class="chip" data-a="selnone">Deseleziona</button>`;
   } else if (t && t.kind === 'compasso') {
-    h = `<div class="ttl">Compasso</div><span class="hint">Con due dita lo prendi, lo sposti e lo giri.</span><div class="lbl">Apertura cm</div><button class="numbox" id="radBox" data-a="radbox">${fmt(t.r)}</button><div class="sp"></div><button class="chip" data-a="center"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Segna il centro</button>`;
+    const ph = U.cg && U.cg.id === t.id ? U.cg.phase : null;
+    const STEP = { center: '1 · Tocca dove puntare l’ago', open: '2 · Tocca dove aprirlo, o scrivi la misura', trace: '3 · Trascina il dito ovunque per tracciare', arcA: 'Tocca dove inizia l’arco', arcB: 'Tocca dove finisce l’arco' };
+    h = `<div class="ttl">Compasso</div><span class="hint" style="font-weight:700;color:var(--accent)">${ph ? STEP[ph] : 'Due dita per spostarlo e girarlo.'}</span><div class="lbl">Apertura cm</div><button class="numbox" id="radBox" data-a="radbox">${fmt(t.r)}</button>
+      ${U.radii.length ? `<div class="g2">${U.radii.map(r => `<button class="chip" data-a="radq" data-v="${r}">${fmt(r)}</button>`).join('')}</div>` : ''}
+      <div class="sp"></div><button class="chip" data-a="fullc">Circonferenza intera</button><button class="chip ${ph === 'arcA' || ph === 'arcB' ? 'on' : ''}" data-a="arcab">Arco da… a…</button>
+      <button class="chip ${ph === 'center' ? 'on' : ''}" data-a="repoint">Punta altrove</button><button class="chip ${ph === 'open' ? 'on' : ''}" data-a="reopen">Cambia apertura</button><button class="chip" data-a="center"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Segna il centro</button>`;
   } else if (t) {
     h = `<div class="ttl">${TOOLNAME[t.kind]}</div><span class="hint">Appoggia due o tre dita per spostarlo e ruotarlo.</span>${lenControls()}<div class="lbl">Aggancio</div><button class="chip ${D.sheet.magnet ? 'on' : ''}" data-a="magnet">${D.sheet.magnet ? 'Attivo' : 'Spento'}</button>`;
   } else if (U.mode === 'segmento') {
@@ -1704,6 +1749,7 @@ function renderCtx() {
   } else if (U.mode === 'gomma') {
     h = `<div class="ttl">Gomma</div><span class="hint">Tocca o strofina un segno per cancellarlo. Annulla lo recupera.</span>`;
   }
+  if (t && t.kind === 'compasso') h += `<button class="chip" data-a="cgdone">Fine</button>`;
   if (t) h += `<div class="sp"></div><button class="chip" data-a="lock">${lockIcon(t.locked)}${t.locked ? 'Sblocca' : 'Blocca'}</button><button class="chip" data-a="remove">Rimuovi</button>`;
   bar.innerHTML = h; bar.hidden = !h;
 }
@@ -1720,7 +1766,12 @@ $('#ctxbar').addEventListener('click', e => {
   else if (a === 'libera') { U.lenMode = 'libera'; renderCtx(); }
   else if (a === 'precisa') { U.lenMode = 'precisa'; renderCtx(); }
   else if (a === 'lenbox') openNum({ title: 'Lunghezza del segmento (cm)', value: U.lenVal, min: 0.1, max: 100, onOk: v => { U.lenVal = v; U.lenMode = 'precisa'; renderCtx(); toast('Lunghezza precisa: ' + fmt(v) + ' cm. Parti dal punto iniziale e trascina nella direzione voluta.'); } });
-  else if (a === 'radbox' && t) openNum({ title: 'Apertura del compasso (cm)', value: t.r, min: 0.2, max: 60, onOk: v => { pushUndo(); t.r = v; if (cmaxR(t) < v) t.s = v / (2 * CL * 0.97); changed(); } });
+  else if (a === 'radbox' && t) openNum({ title: 'Apertura del compasso (cm)', value: t.r, min: 0.2, max: 60, onOk: v => { pushUndo(); setRadius(t, v); changed(); } });
+  else if (a === 'radq' && t) { pushUndo(); setRadius(t, +b.dataset.v); changed(); }
+  else if (a === 'fullc' && t) { pushUndo(); D.strokes.push({ id: uid(), type: 'arc', cx: t.x, cy: t.y, r: t.r, a0: t.ang, sw: TAU, pen: U.pen, dash: U.dash }); rememberRadius(t.r); changed(); toast('Circonferenza di raggio ' + fmt(t.r) + ' cm tracciata.'); }
+  else if (a === 'arcab' && t) { U.cg = { id: t.id, phase: 'arcA' }; renderCtx(); toast('Tocca dove inizia l’arco.'); }
+  else if ((a === 'repoint' || a === 'reopen') && t) { if (t.locked) { toast('Compasso bloccato: tocca “Sblocca”.'); return; } U.cg = { id: t.id, phase: a === 'repoint' ? 'center' : 'open' }; renderCtx(); toast(a === 'repoint' ? 'Tocca dove puntare l’ago.' : 'Tocca dove aprire il compasso.'); }
+  else if (a === 'cgdone') { U.cg = null; select(null); }
   else if (a === 'center' && t) {
     const c = { x: r3(t.x), y: r3(t.y) };
     if (D.strokes.some(s => s.type === 'mark' && Math.hypot(s.x - c.x, s.y - c.y) < 0.01)) { toast('Il centro è già segnato'); return; }
