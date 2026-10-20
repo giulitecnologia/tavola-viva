@@ -525,9 +525,13 @@ function crossings(a, b, tg) { // dove il tratto da a a b attraversa le linee, i
 }
 // dove agganciare un punto toccato: punti notevoli, poi linee, poi incroci dei quadretti
 function placeSnap(p, tg) {
-  const sp = nearestSnap(p, 18); if (sp) return sp;
-  const ol = onLines(p, 16, tg); if (ol) return ol;
-  return D.sheet.gridSnap && D.sheet.grid ? gridSnap(p) : null;
+  const sp = nearestSnap(p, 18), ol = onLines(p, 16, tg), gq = D.sheet.gridSnap && D.sheet.grid ? gridSnap(p) : null;
+  if (!gq) return sp || ol || null;
+  // con i quadretti vince ciò che è davvero più vicino al dito, così si può agganciare anche l'incrocio accanto a un punto già disegnato
+  const dg = dist(p, gq);
+  if (sp && dist(p, sp) <= dg + 1e-9) return sp;
+  if (ol && dist(p, ol) < dg && !onLines(gq, 0.5, tg)) return ol; // se l'incrocio sta già sulla linea, meglio l'incrocio
+  return gq;
 }
 function gridOnEdge(p, e) { // incrocio dei quadretti vicino a p che sta proprio sul bordo dello strumento (se lo strumento è allineato ai quadretti)
   if (!D.sheet.gridSnap || !D.sheet.grid) return null;
