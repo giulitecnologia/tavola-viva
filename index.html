@@ -1901,6 +1901,8 @@ const GUIDA = [
     'Le tavole restano <b>nel browser di questo computer</b>: chi usa l’app su un altro computer non le vede. Sul computer della LIM condiviso, chi usa lo stesso browser vede le tavole salvate lì.',
     '<b>Scarica file della tavola</b> per conservarla o portarla altrove (si riapre con Apri file…). <b>PDF</b> e <b>PNG</b> della tavola e dei passaggi, in scala reale.',
     'In Tavole trovi anche alcune <b>costruzioni preparate</b> da mostrare passo passo.']],
+  ['Strumenti per la classe', [
+    '<a href="classe.html" target="_blank">Apri gli strumenti per la classe</a>: campana tibetana, timer, semaforo della voce ed estrazione a sorte in una finestrella sempre in primo piano, sopra tutte le schede e i programmi (con Chrome o Edge).']],
 ];
 function guideHTML() {
   return `<div class="guide"><div class="intro">Tocca una voce per leggere come si usa. Su ogni strumento, la barra a destra ricorda anche il passo successivo.</div>${GUIDA.map(([t, li]) => `<details><summary>${t}</summary><ul>${li.map(x => `<li>${x}</li>`).join('')}</ul></details>`).join('')}</div>`;

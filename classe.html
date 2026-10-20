@@ -1,0 +1,418 @@
+<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Strumenti per la classe</title>
+<meta name="theme-color" content="#1f5c45">
+<link rel="icon" type="image/png" sizes="32x32" href="icone/favicon-32.png">
+<style id="wcss">
+/* Finestrella degli strumenti: barra verticale di pulsanti a sinistra, strumento aperto a destra. Si sposta nella finestra sempre in primo piano (Picture-in-Picture) e lì riempie tutto lo spazio. */
+.w{--accent:#1f5c45;--accent-soft:#d3ebe0;--ink:#1d282b;--muted:#5b6b6f;--line:#cbdad1;--bg:#f5f8f6;--verde:#2e9d5b;--giallo:#e8a817;--rosso:#d6453d;
+  position:fixed;right:16px;bottom:16px;z-index:10;display:flex;width:330px;height:330px;background:var(--bg);color:var(--ink);border:2px solid var(--accent);border-radius:14px;box-shadow:0 10px 30px #0003;overflow:hidden;
+  font-family:"Avenir Next","Segoe UI","Helvetica Neue",system-ui,sans-serif;font-size:14px;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;box-sizing:border-box}
+.w *,.w *::before,.w *::after{box-sizing:inherit}
+.w.mini{width:auto;height:auto}
+.w.inpip{position:static;width:100%;height:100vh;border:0;border-radius:0;box-shadow:none}
+.w.inpip.mini{width:100%}
+.w [hidden]{display:none!important}
+.w button{font:inherit;color:inherit;touch-action:manipulation;cursor:pointer}
+.w .bar{display:flex;flex-direction:column;gap:6px;padding:6px;background:var(--accent);flex:none;overflow-y:auto;scrollbar-width:none}
+.w .grip{height:16px;margin:-2px 0 0;border-radius:6px;cursor:grab;touch-action:none;background:radial-gradient(circle,#ffffff99 1.4px,transparent 1.6px) 0 0/6px 6px}
+.w.inpip .grip{display:none}
+.w .tb{position:relative;display:grid;place-items:center;align-content:center;gap:1px;width:54px;min-height:54px;padding:4px 0;border:0;border-radius:12px;background:#ffffff1f;color:#fff}
+.w .tb:active{transform:translateY(1px)}
+.w .tb.on{background:#fff;color:var(--accent)}
+.w .tb svg{width:30px;height:30px}
+.w .tb.bell{background:#f3c969;color:#5a3b00}
+.w .tb.bell.ring{animation:wring .6s}
+@keyframes wring{20%{transform:rotate(-8deg)}50%{transform:rotate(7deg)}80%{transform:rotate(-3deg)}}
+.w .tb .t{font-size:11.5px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+.w .tb .dot{position:absolute;top:5px;right:5px;width:12px;height:12px;border-radius:50%;border:2px solid #fff}
+.w .tb.small{min-height:36px}
+.w .tb.small svg{width:22px;height:22px}
+.w .main{flex:1;min-width:0;display:flex;flex-direction:column;padding:10px}
+.w.mini .main{display:none}
+.w .p{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px}
+.w .row{display:flex;flex-wrap:wrap;gap:5px;justify-content:center}
+.w .b{min-height:38px;min-width:38px;padding:0 10px;border:1px solid var(--line);border-radius:10px;background:#fff;font-weight:600}
+.w .b:active{transform:translateY(1px)}
+.w .b.on,.w .b.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.w .b.sm{min-height:32px;min-width:34px;padding:0 6px;font-size:13px}
+.w .lbl{font-size:12.5px;color:var(--muted);text-align:center}
+/* timer */
+.w .dial{flex:1;min-height:0;width:100%;cursor:pointer;touch-action:manipulation}
+.w .dial .face{fill:#fff;stroke:var(--line);stroke-width:2}
+.w .dial .tick{stroke:#9fb2a9;stroke-width:1.6}
+.w .dial .clock{font-size:30px;font-weight:700;fill:var(--ink);font-variant-numeric:tabular-nums;text-anchor:middle;dominant-baseline:central;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}
+.w .dial .hint{font-size:11px;fill:var(--muted);text-anchor:middle}
+.w .dial.done .face{animation:wflash .5s 6 alternate}
+@keyframes wflash{to{fill:#fbd9d6}}
+/* semaforo */
+.w .lights{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center;gap:6px}
+.w .light{display:flex;align-items:center;gap:10px;flex:1;min-height:0;max-height:64px;padding:4px 10px 4px 4px;border:0;border-radius:40px;background:#2a3437;color:#cfd8d4;text-align:left;font-weight:600;font-size:13.5px;line-height:1.15}
+.w .light i{flex:none;height:100%;aspect-ratio:1;max-height:56px;border-radius:50%;opacity:.25;background:var(--c)}
+.w .light.on{background:#1b2224;color:#fff}
+.w .light.on i{opacity:1;box-shadow:0 0 18px var(--c)}
+.w .meter{position:relative;height:14px;border-radius:7px;background:linear-gradient(90deg,var(--verde) 0 var(--y),var(--giallo) var(--y) var(--r),var(--rosso) var(--r));opacity:.35}
+.w .meter b{position:absolute;inset:0 auto 0 0;border-radius:7px;background:var(--ink);opacity:.7;width:0}
+.w .opts{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);justify-content:center;flex-wrap:wrap}
+.w .opts input[type=range]{flex:1;min-width:80px;accent-color:var(--accent)}
+.w .opts label{display:flex;align-items:center;gap:4px}
+/* estrai */
+.w .name{flex:1;min-height:0;display:grid;place-items:center;text-align:center;font-size:30px;font-weight:700;line-height:1.1;padding:4px;border-radius:12px;background:#fff;border:1px solid var(--line);overflow:hidden;word-break:break-word}
+.w .name.spin{color:var(--muted)}
+.w .name.empty{font-size:14px;font-weight:500;color:var(--muted)}
+.w textarea{flex:1;min-height:0;width:100%;resize:none;padding:8px;border:1px solid var(--line);border-radius:10px;font:inherit;font-size:15px;-webkit-user-select:text;user-select:text}
+</style>
+<style>
+:root{--desk:#cdd9d2;--ink:#1d282b;--muted:#5b6b6f;--accent:#1f5c45;color-scheme:light}
+html,body{margin:0;min-height:100%}
+body{background:var(--desk);color:var(--ink);font-family:"Avenir Next","Segoe UI","Helvetica Neue",system-ui,sans-serif;font-size:17px;line-height:1.45}
+main{max-width:640px;margin:0 auto;padding:32px 16px 380px}
+h1{font-size:28px;margin:0 0 6px;color:var(--accent)}
+.go{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:72px;margin:20px 0;border:0;border-radius:16px;background:var(--accent);color:#fff;font:inherit;font-size:21px;font-weight:700;cursor:pointer;box-shadow:0 6px 18px #1f5c4555}
+.go:active{transform:translateY(1px)}
+.go svg{width:30px;height:30px}
+.note{background:#f5f8f6;border-radius:12px;padding:12px 16px;margin:12px 0}
+.note.warn{background:#fbe9dc;color:#7a3a10}
+ul{padding-left:22px;margin:6px 0}
+li{margin:4px 0}
+a{color:var(--accent)}
+</style>
+</head><body>
+<main>
+  <h1>Strumenti per la classe</h1>
+  <div>Campana, timer, semaforo della voce ed estrazione a sorte, in una finestrella che resta <b>sempre in primo piano</b> sopra tutte le schede e i programmi aperti sulla LIM.</div>
+  <button class="go" id="openPip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><rect x="12" y="11" width="8" height="7" rx="1" fill="currentColor"/></svg><span id="openLbl">Apri la finestrella sulla LIM</span></button>
+  <div class="note warn" id="noPip" hidden>Questo browser non permette la finestrella sempre in primo piano: apri questa pagina con <b>Chrome</b> o <b>Edge</b> sul computer. Intanto gli strumenti funzionano qui, nel riquadro in basso a destra.</div>
+  <div class="note">
+    <b>Come si usa</b>
+    <ul>
+      <li><b>Spostala</b> trascinando la sua barra in alto; <b>ridimensionala</b> tirando un angolo. La volta dopo ricompare dove l’avevi lasciata.</li>
+      <li><b>Lascia aperta questa scheda</b>: puoi passare ad altre schede, a PowerPoint o a un PDF, ma se chiudi questa scheda si chiude anche la finestrella.</li>
+      <li>Il pulsante <b>▸</b> in fondo alla barra riduce la finestrella ai soli pulsanti.</li>
+      <li>Per averla sempre a portata di mano, <b>aggiungi questa pagina ai preferiti</b> (Ctrl+D) e mettila nella barra dei preferiti.</li>
+    </ul>
+  </div>
+  <div class="note">
+    <b>Gli strumenti</b>
+    <ul>
+      <li><b>Campana tibetana</b> (pulsante giallo): un tocco e suona, per richiamare l’attenzione.</li>
+      <li><b>Timer</b>: scegli i minuti, tocca il cerchio per avviare o mettere in pausa. Il disco colorato si consuma e cambia colore; alla fine suona la campana.</li>
+      <li><b>Semaforo</b> della voce: tocca il colore per dire alla classe come si lavora. Con <b>Microfono</b> si accende da solo in base al rumore dell’aula e, se vuoi, suona la campana quando si esagera.</li>
+      <li><b>Estrai</b>: scrivi i nomi una volta sola (restano salvati su questo computer) ed estrai chi interrogare o chi tocca, anche senza ripetere.</li>
+    </ul>
+  </div>
+  <div><a href="./">← Torna a Tavola viva</a></div>
+</main>
+
+<div class="w" id="w">
+  <div class="bar">
+    <div class="grip" title="Trascina per spostare"></div>
+    <button class="tb bell" data-act="bell" title="Campana tibetana"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15h24c0 6-5.4 10-12 10S4 21 4 15z" fill="currentColor" fill-opacity=".3"/><path d="M10 28h12M11 10c0-2 1.5-3 1.5-5M16 10c0-2 1.5-3 1.5-5M21 10c0-2 1.5-3 1.5-5"/></svg></button>
+    <button class="tb" data-tab="timer" title="Timer"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="16" cy="18" r="11"/><path d="M16 18V11M13 3h6"/><path id="tmini" d="M16 18 16 7A11 11 0 0 1 16 7z" fill="currentColor" stroke="none" opacity=".45"/></svg><span class="t" id="tbT" hidden></span></button>
+    <button class="tb" data-tab="semaforo" title="Semaforo della voce"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="2.5" width="14" height="27" rx="4"/><circle cx="16" cy="9" r="2.6"/><circle cx="16" cy="16" r="2.6"/><circle cx="16" cy="23" r="2.6"/></svg><span class="dot" id="semDot" hidden></span></button>
+    <button class="tb" data-tab="estrai" title="Estrai a sorte"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="5" y="5" width="22" height="22" rx="5"/><circle cx="11" cy="11" r="1.8" fill="currentColor"/><circle cx="21" cy="11" r="1.8" fill="currentColor"/><circle cx="16" cy="16" r="1.8" fill="currentColor"/><circle cx="11" cy="21" r="1.8" fill="currentColor"/><circle cx="21" cy="21" r="1.8" fill="currentColor"/></svg></button>
+    <button class="tb small" data-act="mini" title="Riduci ai soli pulsanti"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path id="miniIco" d="m15 6-6 6 6 6"/></svg></button>
+  </div>
+  <div class="main">
+    <div class="p" data-p="timer">
+      <svg class="dial" id="dial" viewBox="0 0 200 200" role="button" aria-label="Avvia o metti in pausa il timer">
+        <circle class="face" cx="100" cy="100" r="96"/>
+        <g id="ticks"></g>
+        <path id="sector" d=""/>
+        <circle cx="100" cy="100" r="5" fill="#1d282b"/>
+        <text class="clock" id="clock" x="100" y="100">5:00</text>
+        <text class="hint" id="dialHint" x="100" y="186">tocca per avviare</text>
+      </svg>
+      <div class="row" id="presets"></div>
+      <div class="row"><button class="b sm" data-t="-1">−1 min</button><button class="b sm" data-t="+1">+1 min</button><button class="b sm" data-t="reset">Ricomincia</button></div>
+    </div>
+    <div class="p" data-p="semaforo" hidden>
+      <div class="lights">
+        <button class="light" data-sem="verde" style="--c:var(--verde)"><i></i><span data-l="verde">Voce normale</span></button>
+        <button class="light" data-sem="giallo" style="--c:var(--giallo)"><i></i><span data-l="giallo">Sottovoce</span></button>
+        <button class="light" data-sem="rosso" style="--c:var(--rosso)"><i></i><span data-l="rosso">Silenzio</span></button>
+      </div>
+      <div id="micBox" hidden>
+        <div class="meter" id="meter"><b id="meterB"></b></div>
+        <div class="opts"><span>Tollerante</span><input type="range" id="soglia" min="20" max="85" value="55" title="Quanto rumore si accetta"><span>Severo</span></div>
+        <div class="opts"><label><input type="checkbox" id="autoBell" checked> campana se c’è troppo rumore</label></div>
+      </div>
+      <div class="row"><button class="b sm" id="micBtn">🎤 Microfono</button><button class="b sm" data-sem="off">Spegni</button></div>
+    </div>
+    <div class="p" data-p="estrai" hidden>
+      <div id="drawView" class="p">
+        <div class="name empty" id="name">Premi “Nomi” e scrivi i nomi della classe, uno per riga.</div>
+        <div class="lbl" id="left"></div>
+        <div class="row"><button class="b pri" id="drawBtn" style="flex:1">Estrai</button><button class="b" id="namesBtn">Nomi</button></div>
+        <div class="opts"><label><input type="checkbox" id="noRep" checked> senza ripetere</label><button class="b sm" id="restart">Rimetti tutti</button></div>
+      </div>
+      <div id="editView" class="p" hidden>
+        <textarea id="names" placeholder="Un nome per riga" spellcheck="false"></textarea>
+        <div class="row"><button class="b pri" id="namesOk" style="flex:1">Fatto</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+const W = document.getElementById('w');
+const $ = s => W.querySelector(s);
+const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+let pip = null; // finestra sempre in primo piano, quando è aperta
+const host = () => pip || window;
+
+// ---------- suono: campana tibetana sintetizzata (nessun file audio) ----------
+let ac = null, master = null;
+function audio() {
+  if (!ac) {
+    ac = new (window.AudioContext || window.webkitAudioContext)();
+    const comp = ac.createDynamicsCompressor(); comp.connect(ac.destination);
+    master = ac.createGain(); master.gain.value = 0.9; master.connect(comp);
+    // riverbero leggero: risposta all'impulso di rumore che si spegne
+    const len = ac.sampleRate * 2.5, ir = ac.createBuffer(2, len, ac.sampleRate);
+    for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3); }
+    const rev = ac.createConvolver(); rev.buffer = ir;
+    const wet = ac.createGain(); wet.gain.value = 0.25;
+    master.connect(rev); rev.connect(wet); wet.connect(comp);
+  }
+  if (ac.state === 'suspended') ac.resume();
+  return ac;
+}
+function bell(delay = 0) {
+  const a = audio(), t = a.currentTime + 0.03 + delay, f0 = 233;
+  const out = a.createGain(); out.gain.value = 0.42; out.connect(master);
+  // parziali di una campana a ciotola: rapporto, ampiezza, durata (s); ognuna in coppia leggermente stonata per il battimento
+  for (const [r, amp, dur] of [[1, 1, 10], [2.71, 0.55, 7], [5.15, 0.28, 4], [8.1, 0.14, 2.4], [11.6, 0.07, 1.3]]) {
+    for (const det of [-0.45, 0.45]) {
+      const o = a.createOscillator(), g = a.createGain();
+      o.frequency.value = f0 * r + det * r;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(amp / 2, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(out); o.start(t); o.stop(t + dur + 0.05);
+    }
+  }
+  // colpo del batacchio
+  const n = a.createBuffer(1, a.sampleRate * 0.05, a.sampleRate), d = n.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+  const s = a.createBufferSource(), bp = a.createBiquadFilter(), sg = a.createGain();
+  s.buffer = n; bp.type = 'bandpass'; bp.frequency.value = 2400; bp.Q.value = 1.2; sg.gain.value = 0.25;
+  s.connect(bp); bp.connect(sg); sg.connect(out); s.start(t);
+  host().setTimeout(() => { const b = $('.tb.bell'); b.classList.remove('ring'); void b.offsetWidth; b.classList.add('ring'); }, delay * 1000);
+}
+
+// ---------- schede ----------
+let tab = lsGet('classe.scheda', 'timer');
+function showTab(t) {
+  tab = t; lsSet('classe.scheda', t);
+  W.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === t && !W.classList.contains('mini')));
+  W.querySelectorAll('[data-p]').forEach(p => p.hidden = p.dataset.p !== t);
+}
+function setMini(on) {
+  const before = { w: W.offsetWidth, h: W.offsetHeight };
+  W.classList.toggle('mini', on);
+  $('#miniIco').setAttribute('d', on ? 'm9 6 6 6-6 6' : 'm15 6-6 6 6 6');
+  showTab(tab);
+  if (pip) { // la finestrella si stringe ai soli pulsanti e si riallarga
+    try {
+      if (on) { lastPipSize = { w: pip.outerWidth, h: pip.outerHeight }; pip.resizeTo($('.bar').offsetWidth + pip.outerWidth - pip.innerWidth, pip.outerHeight); }
+      else if (lastPipSize) pip.resizeTo(lastPipSize.w, lastPipSize.h);
+    } catch (e) {}
+  }
+}
+let lastPipSize = null;
+
+// ---------- timer ----------
+const T = { dur: lsGet('classe.durata', 5) * 60000, left: 0, run: false, end: 0, done: false };
+T.left = T.dur;
+(function buildDial() {
+  let s = '';
+  for (let i = 0; i < 60; i++) { const a = i * Math.PI / 30, r1 = i % 5 ? 90 : 84; s += `<line class="tick" x1="${100 + Math.sin(a) * r1}" y1="${100 - Math.cos(a) * r1}" x2="${100 + Math.sin(a) * 95}" y2="${100 - Math.cos(a) * 95}"/>`; }
+  $('#ticks').innerHTML = s;
+  $('#presets').innerHTML = [1, 2, 3, 5, 10, 15, 20, 30].map(m => `<button class="b sm" data-m="${m}">${m}′</button>`).join('');
+})();
+function sectorPath(f, cx, cy, r) {
+  if (f <= 0) return '';
+  if (f >= 0.9999) return `M${cx} ${cy - r}A${r} ${r} 0 1 1 ${cx - 0.01} ${cy - r}Z`;
+  const a = f * 2 * Math.PI, x = cx + Math.sin(a) * r, y = cy - Math.cos(a) * r;
+  return `M${cx} ${cy}L${cx} ${cy - r}A${r} ${r} 0 ${f > 0.5 ? 1 : 0} 1 ${x} ${y}Z`;
+}
+const fmt = ms => { const s = Math.ceil(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+function drawTimer() {
+  if (T.run) T.left = Math.max(0, T.end - Date.now());
+  const f = T.dur ? T.left / T.dur : 0;
+  const col = f > 0.5 ? 'var(--verde)' : f > 0.2 ? 'var(--giallo)' : 'var(--rosso)';
+  const sec = $('#sector'); sec.setAttribute('d', sectorPath(f, 100, 100, 82)); sec.style.fill = col;
+  $('#clock').textContent = T.done ? 'Fine!' : fmt(T.left);
+  $('#dialHint').textContent = T.done ? 'tocca per ricominciare' : T.run ? 'tocca per la pausa' : T.left < T.dur ? 'in pausa: tocca per riprendere' : 'tocca per avviare';
+  $('#dial').classList.toggle('done', T.done);
+  // anteprima sul pulsante della barra, visibile anche con la finestrella ridotta
+  const active = T.run || T.left < T.dur || T.done;
+  $('#tmini').setAttribute('d', active ? sectorPath(f, 16, 18, 9) : '');
+  const tt = $('#tbT'); tt.hidden = !active; tt.textContent = T.done ? 'fine' : fmt(T.left);
+  if (T.run && T.left <= 0) { T.run = false; T.done = true; bell(0); bell(2.2); drawTimer(); }
+}
+function setDur(ms) { T.dur = Math.max(60000, Math.min(120 * 60000, ms)); T.left = T.dur; T.run = false; T.done = false; lsSet('classe.durata', T.dur / 60000); drawTimer(); }
+function toggleTimer() {
+  if (T.done) { setDur(T.dur); return; }
+  if (T.run) { T.left = Math.max(0, T.end - Date.now()); T.run = false; }
+  else { T.end = Date.now() + T.left; T.run = true; }
+  drawTimer();
+}
+// il ritmo lo dà la finestra visibile, così non viene rallentato quando la scheda resta dietro
+let tickId = 0, tickWin = null;
+function startTick() { if (tickWin) try { tickWin.clearInterval(tickId); } catch (e) {} tickWin = host(); tickId = tickWin.setInterval(() => { if (T.run) drawTimer(); }, 200); }
+
+// ---------- semaforo ----------
+let sem = null;
+const LBL = { man: { verde: 'Voce normale', giallo: 'Sottovoce', rosso: 'Silenzio' }, mic: { verde: 'Va bene così', giallo: 'Si alza la voce…', rosso: 'Troppo rumore!' } };
+function setSem(c) {
+  sem = c;
+  W.querySelectorAll('.light').forEach(l => l.classList.toggle('on', l.dataset.sem === c));
+  const d = $('#semDot'); d.hidden = !c; if (c) d.style.background = `var(--${c})`;
+}
+const mic = { on: false, stream: null, an: null, buf: null, lvl: 0, loudSince: 0, lastBell: 0, id: 0, win: null };
+function micLabels() { const L = mic.on ? LBL.mic : LBL.man; W.querySelectorAll('[data-l]').forEach(s => s.textContent = L[s.dataset.l]); }
+const soglia = $('#soglia');
+soglia.value = lsGet('classe.soglia', 55);
+function thresholds() { const y = 100 - +soglia.value; return { y, r: Math.min(98, y + 18) }; } // più a destra = più severo
+function paintMeter() { const { y, r } = thresholds(); const m = $('#meter'); m.style.setProperty('--y', y + '%'); m.style.setProperty('--r', r + '%'); }
+soglia.addEventListener('input', () => { lsSet('classe.soglia', +soglia.value); paintMeter(); });
+async function micStart() {
+  try {
+    const a = audio();
+    mic.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    const src = a.createMediaStreamSource(mic.stream);
+    mic.an = a.createAnalyser(); mic.an.fftSize = 2048; mic.buf = new Float32Array(mic.an.fftSize);
+    src.connect(mic.an);
+    mic.on = true; $('#micBox').hidden = false; $('#micBtn').classList.add('on'); micLabels(); paintMeter(); micLoop();
+  } catch (e) {
+    alert('Il microfono non è disponibile: controlla che sia collegato e consenti l’uso del microfono a questa pagina.');
+  }
+}
+function micStop() {
+  mic.on = false; if (mic.win) try { mic.win.clearInterval(mic.id); } catch (e) {}
+  if (mic.stream) mic.stream.getTracks().forEach(t => t.stop());
+  mic.stream = null; $('#micBox').hidden = true; $('#micBtn').classList.remove('on'); micLabels();
+}
+function micLoop() {
+  if (mic.win) try { mic.win.clearInterval(mic.id); } catch (e) {}
+  if (!mic.on) return;
+  mic.win = host();
+  mic.id = mic.win.setInterval(() => {
+    mic.an.getFloatTimeDomainData(mic.buf);
+    let s = 0; for (const v of mic.buf) s += v * v;
+    const db = 20 * Math.log10(Math.sqrt(s / mic.buf.length) + 1e-9);
+    const lvl = Math.max(0, Math.min(100, (db + 65) * 100 / 60));
+    mic.lvl += (lvl - mic.lvl) * (lvl > mic.lvl ? 0.35 : 0.08); // sale in fretta, scende piano
+    $('#meterB').style.width = mic.lvl + '%';
+    const { y, r } = thresholds(), now = Date.now();
+    setSem(mic.lvl >= r ? 'rosso' : mic.lvl >= y ? 'giallo' : 'verde');
+    if (mic.lvl >= r) {
+      if (!mic.loudSince) mic.loudSince = now;
+      // campana dopo 2 secondi di troppo rumore, non più di una ogni 15 secondi
+      if ($('#autoBell').checked && now - mic.loudSince > 2000 && now - mic.lastBell > 15000) { mic.lastBell = now; bell(); }
+    } else mic.loudSince = 0;
+  }, 100);
+}
+
+// ---------- estrai ----------
+let names = lsGet('classe.nomi', []), pool = lsGet('classe.restano', null), spinning = false;
+function cleanPool() { if (!Array.isArray(pool)) pool = names.slice(); pool = pool.filter(n => names.includes(n)); }
+function showLeft() {
+  const el = $('#left');
+  el.textContent = !names.length ? '' : $('#noRep').checked ? (pool.length ? `Restano ${pool.length} di ${names.length}` : 'Estratti tutti: premi “Rimetti tutti”') : `${names.length} nomi`;
+}
+function draw() {
+  if (spinning) return;
+  if (!names.length) { openNames(); return; }
+  const noRep = $('#noRep').checked;
+  if (noRep && !pool.length) { showLeft(); return; }
+  const from = noRep ? pool : names, pick = from[Math.floor(Math.random() * from.length)];
+  const el = $('#name'); el.classList.remove('empty'); el.classList.add('spin'); spinning = true;
+  let i = 0; const steps = 14;
+  const step = () => { // i nomi scorrono rallentando, poi si ferma
+    if (i++ < steps) { el.textContent = names[Math.floor(Math.random() * names.length)]; host().setTimeout(step, 30 + i * i * 0.9); return; }
+    el.textContent = pick; el.classList.remove('spin'); spinning = false;
+    if (noRep) { pool.splice(pool.indexOf(pick), 1); lsSet('classe.restano', pool); }
+    showLeft();
+  };
+  step();
+}
+function openNames() { $('#names').value = names.join('\n'); $('#drawView').hidden = true; $('#editView').hidden = false; $('#names').focus(); }
+function saveNames() {
+  names = [...new Set($('#names').value.split('\n').map(s => s.trim()).filter(Boolean))];
+  pool = names.slice(); lsSet('classe.nomi', names); lsSet('classe.restano', pool);
+  $('#editView').hidden = true; $('#drawView').hidden = false;
+  const el = $('#name'); el.classList.toggle('empty', !names.length);
+  el.textContent = names.length ? 'Pronti!' : 'Premi “Nomi” e scrivi i nomi della classe, uno per riga.';
+  showLeft();
+}
+
+// ---------- comandi ----------
+W.addEventListener('click', e => {
+  const b = e.target.closest('button, #dial'); if (!b) return;
+  audio(); // sblocca l'audio al primo tocco
+  if (b.dataset.act === 'bell') bell();
+  else if (b.dataset.act === 'mini') setMini(!W.classList.contains('mini'));
+  else if (b.dataset.tab) { if (W.classList.contains('mini')) setMini(false); showTab(b.dataset.tab); }
+  else if (b.id === 'dial') toggleTimer();
+  else if (b.dataset.m) setDur(+b.dataset.m * 60000);
+  else if (b.dataset.t === 'reset') setDur(T.dur);
+  else if (b.dataset.t) { // ±1 minuto anche a timer avviato
+    const d = (b.dataset.t === '+1' ? 1 : -1) * 60000;
+    if (T.run) { T.end = Math.max(Date.now() + 1000, T.end + d); T.dur = Math.max(T.dur + d, T.end - Date.now()); drawTimer(); }
+    else setDur(T.dur + d);
+  }
+  else if (b.dataset.sem) { if (mic.on) micStop(); setSem(b.dataset.sem === 'off' ? null : b.dataset.sem); }
+  else if (b.id === 'micBtn') mic.on ? micStop() : micStart();
+  else if (b.id === 'drawBtn') draw();
+  else if (b.id === 'namesBtn') openNames();
+  else if (b.id === 'namesOk') saveNames();
+  else if (b.id === 'restart') { pool = names.slice(); lsSet('classe.restano', pool); showLeft(); }
+});
+$('#noRep').addEventListener('change', showLeft);
+
+// trascinare il riquadro quando è dentro la pagina
+(function drag() {
+  const g = $('.grip'); let sx, sy, ox, oy;
+  g.addEventListener('pointerdown', e => {
+    const r = W.getBoundingClientRect(); sx = e.clientX; sy = e.clientY; ox = r.left; oy = r.top;
+    g.setPointerCapture(e.pointerId);
+  });
+  g.addEventListener('pointermove', e => {
+    if (!g.hasPointerCapture(e.pointerId)) return;
+    const x = Math.max(0, Math.min(innerWidth - W.offsetWidth, ox + e.clientX - sx)), y = Math.max(0, Math.min(innerHeight - W.offsetHeight, oy + e.clientY - sy));
+    Object.assign(W.style, { left: x + 'px', top: y + 'px', right: 'auto', bottom: 'auto' });
+  });
+})();
+
+// ---------- finestra sempre in primo piano ----------
+const canPip = 'documentPictureInPicture' in window;
+const openBtn = document.getElementById('openPip');
+if (!canPip) { openBtn.hidden = true; document.getElementById('noPip').hidden = false; }
+openBtn.addEventListener('click', async () => {
+  audio();
+  if (pip) { pip.close(); return; }
+  try {
+    const win = await documentPictureInPicture.requestWindow({ width: 340, height: 340 });
+    win.document.title = 'Strumenti per la classe';
+    const st = win.document.createElement('style'); st.textContent = document.getElementById('wcss').textContent + 'html,body{margin:0;height:100%;overflow:hidden;background:#f5f8f6}';
+    win.document.head.append(st);
+    W.style.cssText = ''; W.classList.add('inpip');
+    win.document.body.append(W);
+    pip = win; startTick(); micLoop();
+    document.getElementById('openLbl').textContent = 'Riporta gli strumenti in questa pagina';
+    win.addEventListener('pagehide', () => {
+      pip = null; W.classList.remove('inpip'); document.body.append(W);
+      document.getElementById('openLbl').textContent = 'Apri la finestrella sulla LIM';
+      startTick(); micLoop();
+    });
+  } catch (e) {
+    alert('Non è stato possibile aprire la finestrella: ' + e.message);
+  }
+});
+
+setMini(false); showTab(tab); drawTimer(); startTick(); setSem(null); micLabels(); cleanPool(); showLeft();
+if (names.length) { const el = $('#name'); el.classList.remove('empty'); el.textContent = 'Pronti!'; }
+</script>
+</body></html>

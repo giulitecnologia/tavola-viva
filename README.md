@@ -13,3 +13,7 @@ Dal sito https://giulitecnologia.github.io/tavola-viva/ si può installare come 
 - **Computer (Chrome o Edge)**: icona di installazione a destra nella barra dell'indirizzo, oppure menu ⋮ → "Installa Tavola viva".
 - **iPad / iPhone (Safari)**: pulsante Condividi → "Aggiungi alla schermata Home".
 - **Android (Chrome)**: menu ⋮ → "Installa app" o "Aggiungi a schermata Home".
+
+## Strumenti per la classe
+
+La pagina `classe.html` (https://giulitecnologia.github.io/tavola-viva/classe.html) apre una finestrella sempre in primo piano, sopra tutte le schede e i programmi aperti sulla LIM: campana tibetana, timer visivo rotondo, semaforo della voce (a mano o col microfono) ed estrazione a sorte dei nomi. La finestrella sempre in primo piano funziona con Chrome ed Edge sul computer; negli altri browser gli strumenti restano in un riquadro spostabile dentro la pagina.
