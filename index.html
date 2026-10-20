@@ -904,6 +904,12 @@ function onDown(p, e) {
     if (ph === 'center') return G0('gcenter', gc);
     if (ph === 'open') return G0('gopen', gc);
     if (ph === 'arcA' || ph === 'arcB') return G0('garc', gc);
+    // passo 3: l'ago e la punta si possono riprendere col dito, come col compasso vero
+    if (!gc.locked) {
+      const cg = cgeom(gc), tol = (e.pointerType === 'mouse' ? 18 : 34) / V.s, dC = dist(p, cg.C), dP = dist(p, cg.P);
+      if (dC < tol && dC <= dP) return G0('gcenter', gc, { keep: true });
+      if (dP < tol) return G0('gopen', gc, { keep: true });
+    }
     return G0('trace', gc, { a0: gc.ang, prevA: Math.atan2(p.y - gc.y, p.x - gc.x), sw: 0, anywhere: true });
   }
   // 1) maniglie dello strumento selezionato
@@ -1103,10 +1109,17 @@ function onUp(p) {
     case 'move': if (g.moved && t.kind === 'compasso') { t.x = r3(t.x); t.y = r3(t.y); } if (g.moved) changed(); break;
     case 'rot': case 'size': case 'crot': case 'cres': case 'open': if (g.moved) changed(); break;
     case 'gcenter': {
+      if (g.keep) { // ago ripreso dal passo 3
+        if (g.moved) { U.cg.phase = 'trace'; changed(); toast('Ago spostato: trascina il dito per tracciare.'); }
+        else { U.cg.phase = 'center'; U.cg.keepR = true; renderCtx(); toast('Tocca dove puntare l’ago, oppure trascinalo.'); }
+        break;
+      }
       if (!g.moved) { if (!g.undone) pushUndo(); const q = placeSnap(p) || p; t.x = r3(q.x); t.y = r3(q.y); }
+      if (U.cg.keepR) { U.cg = { id: t.id, phase: 'trace' }; changed(); toast('Ago spostato, stessa apertura: trascina il dito per tracciare.'); break; } // spostato toccando l'ago: l'apertura resta
       U.cg.phase = 'open'; changed(); toast('Ora tocca dove aprire il compasso, oppure scrivi la misura.'); break;
     }
     case 'gopen': {
+      if (g.keep && !g.moved) { U.cg.phase = 'open'; renderCtx(); toast('Tocca dove aprire il compasso, oppure trascina la punta.'); break; }
       if (!g.moved) { if (!g.undone) pushUndo(); setOpen(t, p); }
       U.cg.phase = 'trace'; changed(); toast('Ora trascina il dito in qualsiasi punto per tracciare.'); break;
     }
@@ -1727,7 +1740,7 @@ function renderCtx() {
       <button class="chip ${U.addSel ? 'on' : ''}" data-a="addsel">Seleziona altri</button><button class="chip" data-a="selall">Seleziona tutto</button><button class="chip" data-a="selnone">Deseleziona</button>`;
   } else if (t && t.kind === 'compasso') {
     const ph = U.cg && U.cg.id === t.id ? U.cg.phase : null;
-    const STEP = { center: '1 · Tocca dove puntare l’ago', open: '2 · Tocca dove aprirlo, o scrivi la misura', trace: '3 · Trascina il dito ovunque per tracciare', arcA: 'Tocca dove inizia l’arco', arcB: 'Tocca dove finisce l’arco' };
+    const STEP = { center: '1 · Tocca dove puntare l’ago', open: '2 · Tocca dove aprirlo, o scrivi la misura', trace: '3 · Trascina il dito ovunque per tracciare. Per spostarlo, trascina l’ago; per aprirlo, la punta', arcA: 'Tocca dove inizia l’arco', arcB: 'Tocca dove finisce l’arco' };
     h = `<div class="ttl">Compasso</div><span class="hint" style="font-weight:700;color:var(--accent)">${ph ? STEP[ph] : 'Due dita per spostarlo e girarlo.'}</span><div class="lbl">Apertura cm</div><button class="numbox" id="radBox" data-a="radbox">${fmt(t.r)}</button>
       ${U.radii.length ? `<div class="g2">${U.radii.map(r => `<button class="chip" data-a="radq" data-v="${r}">${fmt(r)}</button>`).join('')}</div>` : ''}
       <div class="sp"></div><button class="chip" data-a="fullc">Circonferenza intera</button><button class="chip ${ph === 'arcA' || ph === 'arcB' ? 'on' : ''}" data-a="arcab">Arco da… a…</button>
