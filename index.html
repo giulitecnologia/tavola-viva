@@ -309,9 +309,15 @@ function idbGet(k) { return new Promise(res => { try { const q = KV.db.transacti
 async function kvLoad(keys) {
   KV.db = await idbOpen();
   for (const k of keys) {
-    let v = KV.db ? await idbGet(k) : undefined;
-    if (v === undefined || v === null) { const old = lsGet(k); if (old != null) { v = old; if (KV.db && kvSet(k, v)) try { localStorage.removeItem(k); } catch (_) { } } } // dati vecchi: si spostano nell'archivio nuovo
-    KV.mem[k] = v === undefined ? null : v;
+    const fresh = KV.db ? await idbGet(k) : undefined, old = lsGet(k);
+    let v = fresh == null ? old : fresh;
+    // tavole ed esempi: si uniscono i due archivi, così nessuna tavola resta indietro (per la stessa tavola vince la più recente)
+    if ((k === LS.boards || k === LS.esempi) && fresh && old && typeof fresh === 'object' && typeof old === 'object') {
+      v = Object.assign({}, old);
+      for (const [n, x] of Object.entries(fresh)) if (!v[n] || ((x && x.savedAt) || 0) >= ((v[n] && v[n].savedAt) || 0)) v[n] = x;
+    }
+    KV.mem[k] = v == null ? null : v;
+    if (KV.db && v != null && JSON.stringify(v) !== JSON.stringify(fresh)) kvSet(k, v); // la copia nel vecchio archivio non si cancella più
   }
 }
 const kvGet = k => KV.mem[k] == null ? null : KV.mem[k];
