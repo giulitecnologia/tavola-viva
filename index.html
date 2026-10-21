@@ -367,7 +367,7 @@ function newDoc() {
 let D = newDoc();
 const COLORS = [['Rosso', '#e53935'], ['Arancio', '#fb8c00'], ['Giallo', '#fdd835'], ['Verde', '#43a047'], ['Azzurro', '#29b6f6'], ['Blu', '#1e66c9'], ['Viola', '#8e44ad'], ['Marrone', '#8d5a3b'], ['Grigio', '#8a9399']];
 const COLPREF = 'tavolaviva.colore';
-const U = { cg: null, radii: (() => { try { return JSON.parse(localStorage.getItem('tavolaviva.raggi')) || []; } catch (_) { return []; } })(), col: Object.assign({ mode: 'fill', color: '#29b6f6', alpha: 0.5, bw: 0.6, all: false }, (() => { try { return JSON.parse(localStorage.getItem(COLPREF)) || {}; } catch (_) { return {}; } })()), mode: 'sposta', pen: 'HB', dash: false, sel: null, selS: [], addSel: false, dotStyle: 'dot', dotLetter: false, lenMode: 'libera', lenVal: 10, view: -1, viewData: null, letter: 'punto', nextLetter: 'A', textSize: 0.5, hoverEdge: null };
+const U = { angGuide: (() => { try { return localStorage.getItem('tavolaviva.angoli') !== '0'; } catch (_) { return true; } })(), cg: null, radii: (() => { try { return JSON.parse(localStorage.getItem('tavolaviva.raggi')) || []; } catch (_) { return []; } })(), col: Object.assign({ mode: 'fill', color: '#29b6f6', alpha: 0.5, bw: 0.6, all: false }, (() => { try { return JSON.parse(localStorage.getItem(COLPREF)) || {}; } catch (_) { return {}; } })()), mode: 'sposta', pen: 'HB', dash: false, sel: null, selS: [], addSel: false, dotStyle: 'dot', dotLetter: false, lenMode: 'libera', lenVal: 10, view: -1, viewData: null, letter: 'punto', nextLetter: 'A', textSize: 0.5, hoverEdge: null };
 
 /* ================= annulla / ripristina ================= */
 let undoS = [], redoS = [];
@@ -536,6 +536,32 @@ function crossings(a, b, tg) { // dove il tratto da a a b attraversa le linee, i
   return out.sort((p, q) => dist(a, p) - dist(a, q));
 }
 // dove agganciare un punto toccato: punti notevoli, poi linee, poi incroci dei quadretti
+// Segmento con angoli guidati: si blocca sui multipli di 15° e si mette parallelo o perpendicolare ai segmenti già disegnati
+const ANGPREF = 'tavolaviva.angoli';
+function segGuide(a, v) {
+  if (!U.angGuide) return null;
+  const th = Math.atan2(v.y, v.x); let best = null;
+  const tryDir = (t, tol, text, ref) => { const df = Math.abs(normAng(th - t)); if (df < tol && (!best || df < best.df - 1e-6 || (Math.abs(df - best.df) < 1e-6 && ref && !best.ref))) best = { df, t, text, ref }; };
+  const show = t => Math.round(((-t / DEG) % 180 + 180) % 180) + '°'; // angolo sul foglio, misurato come in geometria
+  for (let k = -12; k <= 12; k++) tryDir(k * 15 * DEG, 6 * DEG, show(k * 15 * DEG));
+  for (const s of D.strokes) {
+    if (s.type !== 'line') continue; const L = Math.hypot(s.x2 - s.x1, s.y2 - s.y1); if (L < 0.5) continue;
+    const t0 = Math.atan2(s.y2 - s.y1, s.x2 - s.x1), ref = { a: { x: s.x1, y: s.y1 }, b: { x: s.x2, y: s.y2 } };
+    if (Math.abs(s.x1 - a.x) + Math.abs(s.y1 - a.y) < 1e-6 && Math.abs(s.x2 - a.x) + Math.abs(s.y2 - a.y) < 1e-6) continue;
+    for (const [t, sym] of [[t0, '∥'], [t0 + Math.PI, '∥'], [t0 + Math.PI / 2, '⊥'], [t0 - Math.PI / 2, '⊥']]) tryDir(t, 4 * DEG, sym + ' ' + show(t), ref);
+  }
+  return best ? { d: { x: Math.cos(best.t), y: Math.sin(best.t) }, text: best.text, ref: best.ref || null } : null;
+}
+const distToRay = (q, a, d) => Math.abs((q.x - a.x) * d.y - (q.y - a.y) * d.x);
+function alongRay(a, d, p, g) {
+  const t = Math.max(0, dot(sub(p, a), d)), B0 = add(a, mul(d, t)), tol = 16 * (U.tf || 1) / V.s; let best = null;
+  const offer = q => { const tq = dot(sub(q, a), d); if (tq > 0.05 && distToRay(q, a, d) < 0.05 && dist(q, B0) < tol && (!best || dist(q, B0) < dist(best, B0))) best = q; };
+  for (const q of snapPts()) offer(q);
+  if (D.sheet.stopLines) for (const q of crossings(a, add(a, mul(d, 200)), g.tg || (g.tg = stopTargets()))) offer(q);
+  if (best) { g.snapPt = best; return { x: best.x, y: best.y }; }
+  if (D.sheet.gridSnap && D.sheet.grid) { const gq = gridSnap(B0); if (distToRay(gq, a, d) < 0.02 && dist(gq, B0) < tol) { g.snapPt = gq; return gq; } }
+  g.snapPt = null; return add(a, mul(d, Math.round(t * 10) / 10));
+}
 function placeSnap(p, tg) {
   const sp = nearestSnap(p, 18), ol = onLines(p, 16, tg), gq = D.sheet.gridSnap && D.sheet.grid ? gridSnap(p) : null;
   if (!gq) return sp || ol || null;
@@ -822,6 +848,7 @@ function paintOverlay() {
   if (gst && ['move', 'rot', 'edge', 'seg', 'open', 'multi', 'smove'].includes(gst.type) && gst.moved !== false) paintPoints();
   if (U.hoverEdge && !(gst && gst.type !== 'edge')) hiEdge(U.hoverEdge, HI);
   if (gst && gst.snapEdges) { hiEdge(gst.snapEdges[0], SNAPC); hiEdge(gst.snapEdges[1], SNAPC); }
+  if (gst && gst.refLine) hiEdge(gst.refLine, SNAPC); // segmento di riferimento per parallele e perpendicolari
   if (!gst) return;
   if (gst.guides) for (const gd of gst.guides) { // linee guida di allineamento, come in Canva
     const a = toScr(gd.a), b = toScr(gd.b); setS(); G.save(); G.strokeStyle = GUIDE; G.lineWidth = 1.6; G.setLineDash([7, 5]);
@@ -1087,13 +1114,17 @@ function onMove(p) {
       break;
     }
     case 'seg': {
-      const a = g.a, v = sub(p, a); if (len(v) * V.s < 5) { g.prev = null; break; }
-      let dir = unit(v); const ang = Math.atan2(dir.y, dir.x) / DEG, near = Math.round(ang / 15) * 15; if (Math.abs(ang - near) < 1.5) dir = { x: Math.cos(near * DEG), y: Math.sin(near * DEG) };
+      const a = g.a, v = sub(p, a); g.label = null; g.refLine = null; if (len(v) * V.s < 5) { g.prev = null; break; }
+      const gd = segGuide(a, v); let dir = gd ? gd.d : unit(v);
+      if (!gd) { const ang = Math.atan2(dir.y, dir.x) / DEG, near = Math.round(ang / 15) * 15; if (Math.abs(ang - near) < 1.5) dir = { x: Math.cos(near * DEG), y: Math.sin(near * DEG) }; }
+      if (gd) { g.refLine = gd.ref; g.label = { text: gd.text, at: add(a, { x: -34 / V.s, y: -30 / V.s }) }; }
       if (U.lenMode === 'precisa') {
         const B = add(a, mul(dir, U.lenVal)); g.prev = { kind: 'line', A: a, B, len: U.lenVal, err: (!inSheet(a) || !inSheet(B)) ? 'Il segmento di ' + fmt(U.lenVal) + ' cm uscirebbe dal foglio' : null }; g.snapPt = null;
       } else {
-        let B;
-        const q = placeSnap(p, g.tg); if (q) { B = q; g.snapPt = q; } else { g.snapPt = null; B = add(a, mul(dir, Math.round(len(v) * 10) / 10)); }
+        let B; const sp = nearestSnap(p, 18);
+        if (sp && (!gd || distToRay(sp, a, dir) > 0.05)) { B = sp; g.snapPt = sp; g.refLine = null; g.label = null; } // un punto già disegnato vince sull'angolo
+        else if (gd) { B = alongRay(a, dir, p, g); } // direzione guidata: la fine scorre sulla retta e si ferma su punti, linee e quadretti
+        else { const q = placeSnap(p, g.tg); if (q) { B = q; g.snapPt = q; } else { g.snapPt = null; B = add(a, mul(dir, Math.round(len(v) * 10) / 10)); } }
         g.prev = { kind: 'line', A: a, B, len: dist(a, B), err: null };
       }
       break;
@@ -1773,7 +1804,7 @@ function renderCtx() {
   } else if (t) {
     h = `<div class="ttl">${TOOLNAME[t.kind]}</div><span class="hint">Appoggia due o tre dita per spostarlo e ruotarlo.</span>${lenControls()}<div class="lbl">Aggancio</div><button class="chip ${D.sheet.magnet ? 'on' : ''}" data-a="magnet">${D.sheet.magnet ? 'Attivo' : 'Spento'}</button>`;
   } else if (U.mode === 'segmento') {
-    h = `<div class="ttl">Segmento</div>${lenControls()}`;
+    h = `<div class="ttl">Segmento</div><div class="lbl">Angolo</div><button class="chip ${U.angGuide ? 'on' : ''}" data-a="angg">${U.angGuide ? 'Guidato' : 'Libero'}</button><span class="hint">${U.angGuide ? 'Si blocca su 0°, 15°, 30°, 45°, 60°, 90°… e parallelo o perpendicolare ai segmenti.' : 'Qualsiasi inclinazione.'}</span>${lenControls()}`;
   } else if (U.mode === 'matita') {
     h = `<div class="ttl">Matita</div><span class="hint">Parte e finisce sugli incroci dei quadretti; si ferma quando raggiunge una linea.</span>${snapControls()}`;
   } else if (U.mode === 'colore') {
@@ -1826,6 +1857,7 @@ $('#ctxbar').addEventListener('click', e => {
     pushUndo(); addStroke({ type: 'mark', x: c.x, y: c.y, size: 0.25, dash: false }); changed(); toast('Centro segnato. Si cancella con la Gomma.');
   }
   else if (a === 'magnet') { D.sheet.magnet = !D.sheet.magnet; changed(); }
+  else if (a === 'angg') { U.angGuide = !U.angGuide; try { localStorage.setItem(ANGPREF, U.angGuide ? '1' : '0'); } catch (_) { } renderCtx(); }
   else if (a === 'lstop') { D.sheet.stopLines = !D.sheet.stopLines; changed(); toast(D.sheet.stopLines ? 'Matita, segmento e punto si fermano sulle linee già disegnate.' : 'Le linee non fermano più il tratto.'); }
   else if (a === 'cmode') { U.col.mode = b.dataset.v; saveCol(); renderCtx(); }
   else if (a === 'color') { U.col.color = b.dataset.v; saveCol(); renderCtx(); }
@@ -1882,6 +1914,7 @@ const GUIDA = [
     'Pulsanti utili: <b>Circonferenza intera</b>, <b>Arco da… a…</b>, <b>Segna il centro</b>, <b>Fine</b> per tornare al resto del disegno.']],
   ['Segmento', [
     'Tocca dove inizia e trascina fino a dove finisce. Gli estremi si agganciano a punti, linee e incroci dei quadretti.',
+    'Con <b>Angolo: Guidato</b> il segmento si blocca su orizzontale, verticale, 45°, 30°, 60° (multipli di 15°) e diventa <b>parallelo ∥</b> o <b>perpendicolare ⊥</b> ai segmenti già disegnati: è come avere le squadre invisibili. Con <b>Libero</b> va in qualsiasi direzione.',
     'Con lunghezza <b>Precisa</b> il segmento misura esattamente i cm scritti, nella direzione in cui trascini.',
     'Interruttori a destra: <b>Quadretti</b> (aggancio agli incroci) e <b>Linee</b> (si ferma sulle linee già disegnate).']],
   ['Punto', [
