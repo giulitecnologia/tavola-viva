@@ -1,0 +1,390 @@
+<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tavola viva · Proiezioni</title>
+<meta name="theme-color" content="#1f5c45">
+<link rel="icon" type="image/png" sizes="32x32" href="icone/favicon-32.png">
+<style>
+/* Proiezioni ortogonali nel triedro di Monge: il solido nel triedro, le proiezioni sui tre piani e l'apertura dei piani fino al disegno 2D */
+:root{
+  --desk:#cdd9d2;--chrome:#f5f8f6;--chrome-2:#e6eee9;--ink:#1d282b;--muted:#5b6b6f;--line:#cbdad1;
+  --accent:#1f5c45;--accent-soft:#d3ebe0;
+  --f-ui:"Avenir Next","Segoe UI","Helvetica Neue",system-ui,sans-serif;
+  color-scheme:light;
+}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--desk);color:var(--ink);font-family:var(--f-ui);font-size:15px;overflow:hidden;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit}
+#app{position:fixed;inset:0;display:grid;grid-template-columns:104px 1fr 190px;grid-template-rows:auto 1fr auto;background:var(--desk)}
+#top{grid-column:1/4;display:flex;align-items:center;gap:10px;padding:7px 12px;padding-top:calc(7px + env(safe-area-inset-top,0px));background:var(--chrome);border-bottom:3px solid var(--accent);min-width:0;overflow-x:auto;scrollbar-width:none}
+#top::-webkit-scrollbar{display:none}
+.brand{display:flex;align-items:center;gap:8px;font-weight:700;white-space:nowrap}
+.brand b{font-size:17px}.brand span{font-weight:600;color:var(--accent)}
+.brand .logo{width:28px;height:28px;color:var(--accent);flex:none}
+.spacer{flex:1 1 0;min-width:4px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:46px;min-width:46px;padding:0 12px;border:1px solid var(--line);background:#fff;border-radius:10px;cursor:pointer;white-space:nowrap;font-weight:600;font-size:14.5px;touch-action:manipulation;text-decoration:none;color:inherit;box-sizing:border-box}
+.btn:active{transform:translateY(1px)}
+.btn.on,.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn svg{width:22px;height:22px;flex:none}
+.btn:focus-visible,.sol:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.test{font-size:12.5px;font-weight:700;color:#a6501a;background:#fbe9dc;border:1px solid #ecc9ae;border-radius:8px;padding:4px 8px;white-space:nowrap}
+
+/* solidi a sinistra */
+#solids{grid-row:2/4;background:var(--chrome);border-right:1px solid var(--line);display:flex;flex-direction:column;gap:3px;padding:8px 6px;overflow-y:auto}
+.h{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:700;padding:6px 4px 2px;text-align:center}
+.sol{display:flex;flex-direction:column;align-items:center;gap:3px;min-height:58px;padding:5px 2px;border:1px solid transparent;border-radius:10px;background:transparent;cursor:pointer;font-size:12px;font-weight:600;line-height:1.15;text-align:center;touch-action:manipulation;flex:none}
+.sol svg{width:30px;height:30px}
+.sol.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+
+/* area 3D */
+#stage{grid-row:2;grid-column:2;position:relative;overflow:hidden;min-width:0}
+#cv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;cursor:grab}
+#hint{position:absolute;left:12px;bottom:10px;transition:opacity .6s;padding:7px 11px;border-radius:10px;background:#ffffffe6;border:1px solid var(--line);font-size:13.5px;color:var(--muted);pointer-events:none;max-width:calc(100% - 24px)}
+
+/* opzioni a destra */
+#side{grid-row:2/4;grid-column:3;background:var(--chrome);border-left:1px solid var(--line);overflow-y:auto;padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+#side .ttl{font-weight:700;text-align:center;font-size:15px;padding:2px 0 6px;border-bottom:1px solid var(--line)}
+.fld{display:flex;flex-direction:column;gap:3px}
+.fld .k{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.step{display:grid;grid-template-columns:44px 1fr 44px;gap:4px;align-items:center}
+.step button{min-height:44px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:22px;font-weight:700;cursor:pointer;touch-action:manipulation}
+.step .v{text-align:center;font-weight:700;font-size:18px;font-variant-numeric:tabular-nums}
+.tog{min-height:42px;border:1px solid var(--line);border-radius:10px;background:#fff;font-weight:600;cursor:pointer;text-align:left;padding:0 10px;display:flex;align-items:center;gap:8px;touch-action:manipulation}
+.tog::before{content:'';width:18px;height:18px;border-radius:5px;border:2px solid var(--line);flex:none;box-sizing:border-box}
+.tog.on::before{background:var(--accent);border-color:var(--accent);box-shadow:inset 0 0 0 2px #fff}
+.sp{border-top:1px solid var(--line);margin:4px 0}
+
+/* barra in basso: apertura dei piani */
+#bottom{grid-row:3;grid-column:2;display:flex;align-items:center;gap:12px;padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));background:var(--chrome);border-top:1px solid var(--line);flex-wrap:wrap}
+#bottom .k{font-weight:700;white-space:nowrap}
+#open{flex:1 1 220px;min-width:160px;height:40px;accent-color:var(--accent);touch-action:none}
+#openV{font-weight:700;font-variant-numeric:tabular-nums;min-width:40px}
+
+@media (max-width:1100px){#app{grid-template-columns:84px 1fr 170px}.sol{font-size:11px}.sol svg{width:26px;height:26px}.brand b{display:none}}
+</style>
+</head><body>
+<div id="app">
+  <header id="top">
+    <div class="brand"><svg class="logo" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 26a13 13 0 0 1 22 0" stroke-width="1.6" stroke-dasharray="2.5 2.5"/><path d="M16 4v3M16 7 9 26M16 7l7 19"/><circle cx="16" cy="8" r="2.2" fill="currentColor"/></svg><b>Tavola viva</b><span>· Proiezioni ortogonali</span></div>
+    <span class="test">Versione di prova</span>
+    <div class="spacer"></div>
+    <button class="btn" id="view3d" title="Torna alla vista del triedro in prospettiva">Vista 3D</button>
+    <button class="btn" id="viewFront" title="Guarda il triedro di fronte: con i piani aperti è il disegno sul foglio">Vista di fronte</button>
+    <a class="btn" href="./" title="Torna alla tavola"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5-7 7 7 7"/></svg>Tavola</a>
+    <button class="btn" id="fsBtn" title="Schermo intero"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+  </header>
+
+  <nav id="solids" aria-label="Solidi">
+    <div class="h">Solidi</div>
+    <button class="sol" data-s="parallelepipedo"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M5 11l7-5h15l-7 5zM5 11v15h15V11M20 26l7-5V6"/></svg>Parallele&shy;pipedo</button>
+    <button class="sol" data-s="cubo"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M6 11l6-5h14l-6 5zM6 11v15h14V11M20 26l6-5V6"/></svg>Cubo</button>
+    <button class="sol" data-s="prisma3"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M6 26h14l6-5M6 26l7-6 13 1M6 26V10l7-5v15M20 26V10L6 10M13 5l13 1v15M20 10l6-4"/></svg>Prisma triangolare</button>
+    <button class="sol" data-s="prisma6"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M9 8h14l4 4-4 4H9l-4-4zM5 12v13l4 4h14l4-4V12M9 16v13M23 16v13"/></svg>Prisma esagonale</button>
+    <button class="sol" data-s="piramide"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M16 4 4 24l9 4 15-4zM16 4l-3 24M16 4l12 20"/></svg>Piramide</button>
+    <button class="sol" data-s="cilindro"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7"><ellipse cx="16" cy="8" rx="10" ry="4"/><path d="M6 8v16c0 2.2 4.5 4 10 4s10-1.8 10-4V8"/></svg>Cilindro</button>
+    <button class="sol" data-s="cono"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M16 4 6 24M16 4l10 20"/><ellipse cx="16" cy="24" rx="10" ry="4"/></svg>Cono</button>
+  </nav>
+
+  <main id="stage">
+    <canvas id="cv" aria-label="Triedro di Monge con il solido e le sue proiezioni"></canvas>
+    <div id="hint">Trascina per girare il triedro · due dita per ingrandire e spostare</div>
+  </main>
+
+  <aside id="side" aria-label="Misure e opzioni"></aside>
+
+  <div id="bottom">
+    <button class="btn primary" id="playBtn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg><span id="playLbl">Apri i piani</span></button>
+    <span class="k">Apertura</span>
+    <input type="range" id="open" min="0" max="90" step="1" value="0" aria-label="Apertura dei piani in gradi">
+    <span id="openV">0°</span>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const DEG = Math.PI / 180, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const fmt = v => (Math.round(v * 10) / 10).toString().replace('.', ',');
+
+/* ---------- tema, lo stesso scelto nella tavola ---------- */
+const THEMES = {
+  bosco: { accent: '#1f5c45', soft: '#d3ebe0', desk: '#cdd9d2', chrome: '#f5f8f6', chrome2: '#e6eee9', line: '#cbdad1' },
+  petrolio: { accent: '#0a6873', soft: '#d6ecee', desk: '#c9d3d1', chrome: '#f5f7f6', chrome2: '#e9eeed', line: '#ccd7d5' },
+  lavanda: { accent: '#6247aa', soft: '#e8e2f6', desk: '#d6d1e4', chrome: '#f8f6fc', chrome2: '#edeaf6', line: '#d9d2e8' }
+};
+let TH = THEMES.bosco;
+try { TH = THEMES[JSON.parse(localStorage.getItem('tavolaviva.tema'))] || TH; } catch (_) { }
+for (const [v, k] of [['--accent', 'accent'], ['--accent-soft', 'soft'], ['--desk', 'desk'], ['--chrome', 'chrome'], ['--chrome-2', 'chrome2'], ['--line', 'line']]) document.documentElement.style.setProperty(v, TH[k]);
+document.querySelector('meta[name="theme-color"]').content = TH.accent;
+
+/* ---------- solidi ----------
+   Coordinate del triedro (cm): x lungo la linea di terra (il solido sta a x < 0, PL è il piano x = 0),
+   y = distanza da PV (verso chi guarda), z = altezza sopra PO.
+   Metodo europeo: PO si ribalta in basso ruotando attorno alla linea di terra, PL si ribalta a destra. */
+const KINDS = {
+  parallelepipedo: { n: 'Parallelepipedo', dims: [['a', 'Larghezza', 6], ['b', 'Profondità', 3], ['h', 'Altezza', 4]] },
+  cubo: { n: 'Cubo', dims: [['l', 'Spigolo', 4]] },
+  prisma3: { n: 'Prisma triangolare', dims: [['l', 'Lato di base', 5], ['h', 'Altezza', 6]] },
+  prisma6: { n: 'Prisma esagonale', dims: [['l', 'Lato di base', 2.5], ['h', 'Altezza', 6]] },
+  piramide: { n: 'Piramide a base quadrata', dims: [['l', 'Lato di base', 5], ['h', 'Altezza', 6]] },
+  cilindro: { n: 'Cilindro', dims: [['d', 'Diametro', 4], ['h', 'Altezza', 6]] },
+  cono: { n: 'Cono', dims: [['d', 'Diametro', 5], ['h', 'Altezza', 6]] }
+};
+const S = { kind: 'parallelepipedo', dim: {}, dPV: 2, dPL: 2, rot: 0, open: 0, rays: true, hidden: true, solid: true, labels: true, recall: true };
+for (const k in KINDS) S.dim[k] = Object.fromEntries(KINDS[k].dims.map(d => [d[0], d[2]]));
+try { Object.assign(S, JSON.parse(localStorage.getItem('tavolaviva.proiezioni')) || {}); } catch (_) { }
+S.open = 0;
+const saveS = () => { try { const { open, ...keep } = S; localStorage.setItem('tavolaviva.proiezioni', JSON.stringify(keep)); } catch (_) { } };
+
+// poligono di base (centrato nell'origine) e solido: vertici, facce, spigoli
+function regular(n, R, a0) { return Array.from({ length: n }, (_, i) => [R * Math.cos(a0 + i * 2 * Math.PI / n), R * Math.sin(a0 + i * 2 * Math.PI / n)]); }
+function prismOf(base, h, smooth) {
+  const n = base.length, V = [], F = [];
+  base.forEach(([x, y]) => V.push([x, y, 0])); base.forEach(([x, y]) => V.push([x, y, h]));
+  F.push({ v: [...Array(n).keys()].reverse() }); F.push({ v: [...Array(n).keys()].map(i => i + n) });
+  for (let i = 0; i < n; i++) { const j = (i + 1) % n; F.push({ v: [i, j, j + n, i + n], lat: true }); }
+  return { V, F, smooth, axisH: h };
+}
+function pyramidOf(base, h, smooth) {
+  const n = base.length, V = base.map(([x, y]) => [x, y, 0]); V.push([0, 0, h]);
+  const F = [{ v: [...Array(n).keys()].reverse() }];
+  for (let i = 0; i < n; i++) F.push({ v: [i, (i + 1) % n, n], lat: true });
+  return { V, F, smooth, axisH: h };
+}
+function makeSolid() {
+  const d = S.dim[S.kind]; let m;
+  // base orientata con un lato parallelo a PV (e alla linea di terra)
+  if (S.kind === 'parallelepipedo') m = prismOf([[-d.a / 2, -d.b / 2], [d.a / 2, -d.b / 2], [d.a / 2, d.b / 2], [-d.a / 2, d.b / 2]], d.h);
+  else if (S.kind === 'cubo') m = prismOf([[-d.l / 2, -d.l / 2], [d.l / 2, -d.l / 2], [d.l / 2, d.l / 2], [-d.l / 2, d.l / 2]], d.l);
+  else if (S.kind === 'prisma3') m = prismOf(regular(3, d.l / Math.sqrt(3), -Math.PI / 2 + Math.PI), d.h);
+  else if (S.kind === 'prisma6') m = prismOf(regular(6, d.l, 0), d.h);
+  else if (S.kind === 'piramide') m = pyramidOf(regular(4, d.l / Math.SQRT2, Math.PI / 4), d.h);
+  else if (S.kind === 'cilindro') m = prismOf(regular(64, d.d / 2, 0), d.h, true);
+  else m = pyramidOf(regular(64, d.d / 2, 0), d.h, true);
+  m.round = S.kind === 'cilindro' || S.kind === 'cono';
+  // rotazione attorno all'asse verticale, poi posizione: distanze dal PV e dal PL misurate dal punto più vicino
+  const c = Math.cos(S.rot * DEG), s = Math.sin(S.rot * DEG);
+  m.V = m.V.map(([x, y, z]) => [x * c - y * s, x * s + y * c, z]);
+  const maxX = Math.max(...m.V.map(p => p[0])), minY = Math.min(...m.V.map(p => p[1]));
+  const ox = -S.dPL - maxX, oy = S.dPV - minY;
+  m.V = m.V.map(([x, y, z]) => [x + ox, y + oy, z]); m.axis = [ox, oy];
+  // normali (metodo di Newell) e spigoli con le due facce adiacenti
+  for (const f of m.F) { let nx = 0, ny = 0, nz = 0; const P = f.v.map(i => m.V[i]); for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length]; nx += (a[1] - b[1]) * (a[2] + b[2]); ny += (a[2] - b[2]) * (a[0] + b[0]); nz += (a[0] - b[0]) * (a[1] + b[1]); } const l = Math.hypot(nx, ny, nz) || 1; f.n = [nx / l, ny / l, nz / l]; }
+  const E = new Map();
+  m.F.forEach((f, fi) => f.v.forEach((a, i) => { const b = f.v[(i + 1) % f.v.length], k = a < b ? a + '-' + b : b + '-' + a; if (!E.has(k)) E.set(k, { a: Math.min(a, b), b: Math.max(a, b), f: [] }); E.get(k).f.push(fi); }));
+  m.E = [...E.values()].map(e => Object.assign(e, { smooth: m.smooth && e.f.every(fi => m.F[fi].lat) }));
+  // punti notevoli per raggi proiettanti e linee di richiamo
+  if (m.round) {
+    const [ax, ay] = m.axis, r = S.dim[S.kind].d / 2, h = S.dim[S.kind].h, top = S.kind === 'cilindro';
+    m.key = [[ax - r, ay, 0], [ax + r, ay, 0], [ax, ay - r, 0], [ax, ay + r, 0]];
+    if (top) m.key.push([ax - r, ay, h], [ax + r, ay, h], [ax, ay - r, h], [ax, ay + r, h]); else m.key.push([ax, ay, h]);
+  } else m.key = m.V.slice();
+  return m;
+}
+
+/* ---------- viste ortogonali (metodo europeo) ----------
+   per ogni vista: direzione verso l'osservatore e passaggio dal 3D alle coordinate del piano */
+const VIEWS = {
+  PV: { t: [0, 1, 0], to2: p => [p[0], p[2]] },  // vista di fronte, su PV: (x, z)
+  PO: { t: [0, 0, 1], to2: p => [p[0], p[1]] },  // vista dall'alto, su PO: (x, y)
+  PL: { t: [-1, 0, 0], to2: p => [p[1], p[2]] }  // vista da sinistra, su PL: (y, z)
+};
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+// spigoli in vista: visibili se almeno una faccia adiacente guarda l'osservatore; per i solidi curvi solo i contorni apparenti
+function viewEdges(m, view) {
+  const front = m.F.map(f => dot3(f.n, view.t) > 1e-6), out = [];
+  for (const e of m.E) {
+    const fr = e.f.map(i => front[i]);
+    if (e.smooth) { if (fr.length === 2 && fr[0] !== fr[1]) out.push({ a: view.to2(m.V[e.a]), b: view.to2(m.V[e.b]), vis: true }); continue; }
+    out.push({ a: view.to2(m.V[e.a]), b: view.to2(m.V[e.b]), vis: fr.some(Boolean) });
+  }
+  return out;
+}
+function hull(pts) { // contorno della proiezione (il solido è convesso)
+  const P = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]); if (P.length < 3) return P;
+  const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]), lo = [], up = [];
+  for (const p of P) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+  for (const p of P.reverse()) { while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+  return lo.slice(0, -1).concat(up.slice(0, -1));
+}
+// assi di simmetria (tratto e punto) per cilindro e cono
+function axesOf(m, name) {
+  if (!m.round) return [];
+  const [ax, ay] = m.axis, r = S.dim[S.kind].d / 2, h = m.axisH, e = 0.6;
+  if (name === 'PV') return [[[ax, -e], [ax, h + e]]];
+  if (name === 'PL') return [[[ay, -e], [ay, h + e]]];
+  return [[[ax - r - e, ay], [ax + r + e, ay]], [[ax, ay - r - e], [ax, ay + r + e]]];
+}
+
+/* ---------- dal piano al 3D, con i piani che si aprono ---------- */
+function planeTo3(name, u, v, phi) {
+  const c = Math.cos(phi), s = Math.sin(phi);
+  if (name === 'PV') return [u, 0, v];
+  if (name === 'PO') return [u, v * c, -v * s];      // ruota attorno alla linea di terra, verso il basso
+  return [u * s, u * c, v];                          // PL ruota attorno all'asse verticale, verso destra
+}
+
+/* ---------- camera (assonometria ortogonale) ---------- */
+const cv = $('#cv'), stage = $('#stage'), G = cv.getContext('2d');
+let DPR = 1, CW = 0, CH = 0;
+const CAM = { yaw: 38, pitch: 24, zoom: 1, px: 0, py: 0 };
+let fitS = 30, M = makeSolid(), anim = null;
+function basis() {
+  const ya = CAM.yaw * DEG, pi = CAM.pitch * DEG, c = [-Math.sin(ya) * Math.cos(pi), Math.cos(ya) * Math.cos(pi), Math.sin(pi)];
+  const d = [-c[0], -c[1], -c[2]], r = norm([-d[1], d[0], 0].map((v, i) => i < 2 ? v : 0)), up = cross(d, r);
+  return { c, r: r[0] === 0 && r[1] === 0 ? [1, 0, 0] : r, up };
+}
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+function norm(a) { const l = Math.hypot(...a) || 1; return a.map(v => v / l); }
+let B = basis();
+function scene() { // ingombro dei piani
+  const xs = M.V.map(p => p[0]), ys = M.V.map(p => p[1]), zs = M.V.map(p => p[2]);
+  return { W: Math.max(10, -Math.min(...xs) + 3), D: Math.max(7, Math.max(...ys) + 3), H: Math.max(7, Math.max(...zs) + 3) };
+}
+function proj(p) { const s = fitS * CAM.zoom; return [CW / 2 + CAM.px + s * (dot3(p, B.r) - SC.cx), CH / 2 + CAM.py - s * (dot3(p, B.up) - SC.cy)]; }
+let SC = { cx: 0, cy: 0 };
+function fit() { // il triedro, chiuso e aperto, deve stare tutto nello schermo
+  const { W, D, H } = scene(), pts = [];
+  for (const phi of [0, Math.PI / 2]) for (const [n, u, v] of [['PV', -W, 0], ['PV', -W, H], ['PV', 0, H], ['PO', -W, D], ['PO', 0, D], ['PL', D, 0], ['PL', D, H], ['PV', 0, 0]]) pts.push(planeTo3(n, u, v, phi));
+  const xs = pts.map(p => dot3(p, B.r)), ys = pts.map(p => dot3(p, B.up));
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  SC = { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 }; fitS = Math.min((CW - 40) / (x1 - x0), (CH - 40) / (y1 - y0));
+}
+function layout() { const r = stage.getBoundingClientRect(); DPR = window.devicePixelRatio || 1; CW = r.width; CH = r.height; cv.width = Math.round(CW * DPR); cv.height = Math.round(CH * DPR); fit(); draw(); }
+
+/* ---------- disegno ---------- */
+const INK = '#1c2126', THIN = '#7f8c98';
+let raf = 0; const draw = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; render(); }); };
+function line3(a, b, w, col, dash) { const p = proj(a), q = proj(b); G.beginPath(); G.moveTo(p[0], p[1]); G.lineTo(q[0], q[1]); G.lineWidth = w; G.strokeStyle = col; G.setLineDash(dash || []); G.stroke(); }
+function poly3(P, fill, stroke, w) { G.beginPath(); P.forEach((p, i) => { const q = proj(p); i ? G.lineTo(q[0], q[1]) : G.moveTo(q[0], q[1]); }); G.closePath(); if (fill) { G.fillStyle = fill; G.fill(); } if (stroke) { G.lineWidth = w || 1; G.strokeStyle = stroke; G.setLineDash([]); G.stroke(); } }
+function text3(p, t, col, size, align) { const q = proj(p); G.font = `700 ${size}px ${getComputedStyle(document.body).fontFamily}`; G.fillStyle = col; G.textAlign = align || 'center'; G.textBaseline = 'middle'; G.lineWidth = 4; G.strokeStyle = 'rgba(255,255,255,.9)'; G.setLineDash([]); G.strokeText(t, q[0], q[1]); G.fillText(t, q[0], q[1]); }
+const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+function render() {
+  G.setTransform(DPR, 0, 0, DPR, 0, 0); G.clearRect(0, 0, CW, CH);
+  const phi = S.open * DEG, { W, D, H } = scene(), s = fitS * CAM.zoom, lw = Math.max(1.6, s * 0.06), thin = Math.max(1, s * 0.03);
+  const P = (n, u, v) => planeTo3(n, u, v, phi);
+  // i tre piani, con un leggero quadrettato da 1 cm
+  const planes = [['PV', [[-W, 0], [0, 0], [0, H], [-W, H]], 'rgba(255,255,255,.88)'], ['PO', [[-W, 0], [0, 0], [0, D], [-W, D]], 'rgba(250,252,251,.88)'], ['PL', [[0, 0], [D, 0], [D, H], [0, H]], 'rgba(246,249,248,.88)']];
+  for (const [n, Q, fill] of planes) {
+    poly3(Q.map(([u, v]) => P(n, u, v)), fill, rgba(TH.accent, .55), 1.4);
+    G.save(); G.globalAlpha = .35; const [u0, v0] = Q[0], [u1, v1] = Q[2];
+    for (let u = Math.ceil(Math.min(u0, u1)); u <= Math.max(u0, u1); u++) line3(P(n, u, Math.min(v0, v1)), P(n, u, Math.max(v0, v1)), 1, '#a9bfcb');
+    for (let v = Math.ceil(Math.min(v0, v1)); v <= Math.max(v0, v1); v++) line3(P(n, Math.min(u0, u1), v), P(n, Math.max(u0, u1), v), 1, '#a9bfcb');
+    G.restore();
+  }
+  // linea di terra e spigoli del triedro
+  line3([-W, 0, 0], [0, 0, 0], 2.2, INK); line3(P('PO', 0, 0), P('PO', 0, D), 1.6, rgba(TH.accent, .8)); line3(P('PL', 0, 0), P('PL', 0, H), 1.6, rgba(TH.accent, .8));
+  const opened = S.open >= 89.5;
+  if (opened) line3([0, 0, 0], [D, 0, -D], thin, THIN, [8, 5]); // retta a 45° per riportare le misure fra PO e PL
+  // linee di richiamo, a piani aperti
+  if (opened && S.recall) {
+    const ks = M.key, X = [...new Set(ks.map(p => p[0].toFixed(3)))].map(Number), Y = [...new Set(ks.map(p => p[1].toFixed(3)))].map(Number), Z = [...new Set(ks.map(p => p[2].toFixed(3)))].map(Number);
+    const xmin = Math.min(...X), zmax = Math.max(...Z), ymax = Math.max(...Y);
+    G.save(); G.globalAlpha = .9;
+    for (const x of X) line3([x, 0, zmax], [x, 0, -ymax], thin, '#9aa7b2');
+    for (const z of Z) line3([xmin, 0, z], [ymax, 0, z], thin, '#9aa7b2');
+    for (const y of Y) { line3([xmin, 0, -y], [y, 0, -y], thin, '#9aa7b2'); line3([y, 0, -y], [y, 0, zmax], thin, '#9aa7b2'); }
+    G.restore();
+  }
+  // proiezioni sui tre piani
+  for (const name of ['PV', 'PO', 'PL']) {
+    const v = VIEWS[name], hp = hull(M.V.map(v.to2)), ed = viewEdges(M, v);
+    poly3(hp.map(([u, w]) => P(name, u, w)), rgba(TH.accent, .14));
+    if (S.hidden) for (const e of ed) if (!e.vis) line3(P(name, ...e.a), P(name, ...e.b), thin * 1.3, INK, [Math.max(4, s * .18), Math.max(3, s * .12)]);
+    for (const e of ed) if (e.vis) line3(P(name, ...e.a), P(name, ...e.b), lw, INK);
+    for (const [a, b] of axesOf(M, name)) line3(P(name, ...a), P(name, ...b), thin, '#4f5b63', [Math.max(10, s * .5), 4, 2, 4]);
+  }
+  // raggi proiettanti (a piani chiusi)
+  if (S.rays && S.open < 0.5) {
+    G.save(); G.globalAlpha = .75;
+    for (const p of M.key) { line3(p, [p[0], 0, p[2]], 1.2, '#e8770e', [5, 4]); line3(p, [p[0], p[1], 0], 1.2, '#e8770e', [5, 4]); line3(p, [0, p[1], p[2]], 1.2, '#e8770e', [5, 4]); }
+    G.restore();
+  }
+  // il solido: sparisce mentre i piani si aprono
+  const sa = S.solid ? 1 - clamp((S.open - 25) / 45, 0, 1) : 0;
+  if (sa > 0.01) {
+    G.save(); G.globalAlpha = sa;
+    const front = M.F.map(f => dot3(f.n, B.c) > 1e-6);
+    const faces = M.F.map((f, i) => ({ f, i, d: Math.max(...f.v.map(k => dot3(M.V[k], B.c))) })).filter(o => front[o.i]).sort((a, b) => a.d - b.d);
+    for (const e of M.E) { if (e.smooth) continue; if (!e.f.some(i => front[i]) && S.hidden) line3(M.V[e.a], M.V[e.b], thin, '#6b777b', [5, 4]); }
+    const LIGHT = norm([-0.4, 0.6, 0.9]);
+    for (const o of faces) { const lit = Math.max(0, dot3(o.f.n, LIGHT)), F = o.f.v.map(k => M.V[k]); poly3(F, 'rgba(255,255,255,.82)'); poly3(F, rgba(TH.accent, 0.06 + 0.22 * (1 - lit))); } // facce piene, più scure se in ombra
+    for (const e of M.E) { const fr = e.f.map(i => front[i]); if (e.smooth ? fr[0] !== fr[1] : fr.some(Boolean)) line3(M.V[e.a], M.V[e.b], lw * 0.9, INK); }
+    G.restore();
+  }
+  // etichette
+  if (S.labels) {
+    const fs = clamp(s * 0.55, 13, 24);
+    text3(P('PV', -W + 0.9, H - 0.7), 'PV', TH.accent, fs); text3(P('PO', -W + 0.9, D - 0.7), 'PO', TH.accent, fs); text3(P('PL', D - 0.9, H - 0.7), 'PL', TH.accent, fs);
+    text3([-W - 0.2, 0, 0], 'LT', INK, fs * 0.85, 'right');
+  }
+}
+
+/* ---------- pannello delle misure ---------- */
+function renderSide() {
+  const K = KINDS[S.kind], d = S.dim[S.kind];
+  const stepper = (key, label, val, min, max, st) => `<div class="fld"><span class="k">${label}${key.startsWith('rot') ? '' : ' (cm)'}</span><div class="step"><button data-k="${key}" data-d="-${st}" aria-label="Meno">−</button><span class="v">${fmt(val)}${key.startsWith('rot') ? '°' : ''}</span><button data-k="${key}" data-d="${st}" aria-label="Più">+</button></div></div>`;
+  const tog = (k, l) => `<button class="tog ${S[k] ? 'on' : ''}" data-t="${k}">${l}</button>`;
+  $('#side').innerHTML = `<div class="ttl">${K.n}</div>
+    ${K.dims.map(([k, l]) => stepper('d.' + k, l, d[k], 0.5, 20, 0.5)).join('')}
+    <div class="sp"></div>
+    ${stepper('dPV', 'Distanza da PV', S.dPV, 0, 10, 0.5)}${stepper('dPL', 'Distanza da PL', S.dPL, 0, 10, 0.5)}${stepper('rot', 'Rotazione', S.rot, -90, 90, 15)}
+    <div class="sp"></div>
+    ${tog('rays', 'Raggi proiettanti')}${tog('hidden', 'Spigoli nascosti')}${tog('recall', 'Linee di richiamo')}${tog('solid', 'Solido')}${tog('labels', 'Nomi dei piani')}`;
+}
+$('#side').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.t) { S[b.dataset.t] = !S[b.dataset.t]; saveS(); renderSide(); draw(); return; }
+  const k = b.dataset.k, dv = +b.dataset.d;
+  if (k.startsWith('d.')) { const dk = k.slice(2), d = S.dim[S.kind]; d[dk] = clamp(Math.round((d[dk] + dv) * 10) / 10, 0.5, 20); }
+  else if (k === 'rot') S.rot = clamp(S.rot + dv, -90, 90);
+  else S[k] = clamp(Math.round((S[k] + dv) * 10) / 10, 0, 10);
+  saveS(); M = makeSolid(); fit(); renderSide(); draw();
+});
+function pickSolid(k) { S.kind = k; document.querySelectorAll('.sol').forEach(b => b.classList.toggle('on', b.dataset.s === k)); saveS(); M = makeSolid(); fit(); renderSide(); draw(); }
+document.querySelectorAll('.sol').forEach(b => b.onclick = () => pickSolid(b.dataset.s));
+
+/* ---------- apertura dei piani ---------- */
+const openR = $('#open');
+function setOpen(v) { S.open = clamp(v, 0, 90); openR.value = Math.round(S.open); $('#openV').textContent = Math.round(S.open) + '°'; $('#playLbl').textContent = S.open >= 89.5 ? 'Chiudi i piani' : 'Apri i piani'; draw(); }
+openR.addEventListener('input', () => { anim = null; setOpen(+openR.value); });
+$('#playBtn').onclick = () => { const to = S.open >= 89.5 ? 0 : 90; animate({ open: to }); };
+function animate(target, ms) {
+  const from = { open: S.open, yaw: CAM.yaw, pitch: CAM.pitch }, t0 = performance.now(), dur = ms || 1800, me = {}; anim = me;
+  const step = now => { if (anim !== me) return; const k = clamp((now - t0) / dur, 0, 1), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+    if ('open' in target) setOpen(from.open + (target.open - from.open) * e);
+    if ('yaw' in target) { CAM.yaw = from.yaw + (target.yaw - from.yaw) * e; CAM.pitch = from.pitch + (target.pitch - from.pitch) * e; B = basis(); draw(); }
+    if (k < 1) requestAnimationFrame(step); else anim = null; };
+  requestAnimationFrame(step);
+}
+$('#viewFront').onclick = () => animate({ yaw: 0, pitch: 0 }, 1000);
+$('#view3d').onclick = () => { CAM.zoom = 1; CAM.px = CAM.py = 0; animate({ yaw: 38, pitch: 24 }, 1000); };
+
+/* ---------- gesti: un dito gira il triedro, due dita ingrandiscono e spostano ---------- */
+const pts = new Map(); let g0 = null;
+cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); g0 = snap(); anim = null; $('#hint').hidden = true; });
+function snap() { const P = [...pts.values()]; return { P: P.map(p => ({ ...p })), yaw: CAM.yaw, pitch: CAM.pitch, zoom: CAM.zoom, px: CAM.px, py: CAM.py }; }
+cv.addEventListener('pointermove', e => {
+  if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  const P = [...pts.values()];
+  if (P.length === 1 && g0.P.length === 1) { CAM.yaw = clamp(g0.yaw - (P[0].x - g0.P[0].x) * 0.35, 0, 90); CAM.pitch = clamp(g0.pitch + (P[0].y - g0.P[0].y) * 0.35, 0, 89); B = basis(); }
+  else if (P.length >= 2 && g0.P.length >= 2) {
+    const d0 = Math.hypot(g0.P[0].x - g0.P[1].x, g0.P[0].y - g0.P[1].y), d1 = Math.hypot(P[0].x - P[1].x, P[0].y - P[1].y);
+    CAM.zoom = clamp(g0.zoom * d1 / Math.max(d0, 1), 0.4, 5);
+    CAM.px = g0.px + ((P[0].x + P[1].x) - (g0.P[0].x + g0.P[1].x)) / 2; CAM.py = g0.py + ((P[0].y + P[1].y) - (g0.P[0].y + g0.P[1].y)) / 2;
+  }
+  draw();
+});
+const up = e => { pts.delete(e.pointerId); g0 = snap(); };
+cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+cv.addEventListener('wheel', e => { e.preventDefault(); CAM.zoom = clamp(CAM.zoom * Math.exp(-e.deltaY * 0.0015), 0.4, 5); draw(); }, { passive: false });
+cv.addEventListener('dblclick', () => { CAM.zoom = 1; CAM.px = CAM.py = 0; draw(); });
+
+$('#fsBtn').onclick = () => { const el = document.documentElement; try { document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen(); } catch (_) { } };
+new ResizeObserver(layout).observe(stage);
+pickSolid(S.kind); setOpen(0); layout();
+setTimeout(() => { $('#hint').style.opacity = 0; setTimeout(() => $('#hint').hidden = true, 700); }, 7000);
+window.PR = { S, get M() { return M; }, CAM, setOpen, pickSolid, viewEdges, VIEWS, makeSolid };
+})();
+</script>
+</body></html>
