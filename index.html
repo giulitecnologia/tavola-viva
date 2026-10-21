@@ -906,8 +906,9 @@ function headerAt(p) {
 
 function onDown(p, e) {
   if (U.view >= 0) { toast('Stai guardando un passaggio registrato. Premi “Riprendi disegno” per tornare a disegnare.'); return; }
-  U.tf = e.pointerType === 'mouse' ? 1 : 1.5;
-  const tolH = (e.pointerType === 'mouse' ? 20 : 34) / V.s, tolE = (e.pointerType === 'mouse' ? 22 : 30) / V.s;
+  const fing = e.pointerType === 'touch'; // col dito zone più larghe; penna e mouse sono precisi
+  U.tf = fing ? 1.5 : 1;
+  const tolH = (fing ? 34 : 20) / V.s, tolE = (fing ? 30 : 22) / V.s;
   const st = selTool();
   const G0 = (type, obj, extra) => { gst = Object.assign({ type, obj, p0: p, last: p, moved: false, undone: false, t0: performance.now() }, extra || {}); draw(); };
   // 0) compasso guidato: 1 punta l'ago, 2 apri, 3 traccia trascinando il dito ovunque
@@ -920,7 +921,7 @@ function onDown(p, e) {
     if (ph === 'arcA' || ph === 'arcB') return G0('garc', gc);
     // passo 3: l'ago e la punta si possono riprendere col dito, come col compasso vero
     if (!gc.locked) {
-      const cg = cgeom(gc), tol = (e.pointerType === 'mouse' ? 18 : 34) / V.s, dC = dist(p, cg.C), dP = dist(p, cg.P);
+      const cg = cgeom(gc), tol = (e.pointerType === 'touch' ? 34 : 18) / V.s, dC = dist(p, cg.C), dP = dist(p, cg.P);
       if (dC < tol && dC <= dP) return G0('gcenter', gc, { keep: true });
       if (dP < tol) return G0('gopen', gc, { keep: true });
     }
@@ -1355,15 +1356,24 @@ function multiEnd() {
 }
 
 /* ---- puntatore ---- */
+// penna della LIM: mentre tocca (e per un attimo dopo) il palmo appoggiato viene ignorato;
+// se il palmo ha toccato un istante prima, il suo gesto viene annullato e vince la penna
+let penId = null, penUntil = 0, activeType = null;
+function cancelGesture() {
+  const g = gst; gst = null; activeId = null; U.hoverEdge = null;
+  if (g && g.undone && undoS.length) restoreState(undoS.pop()); else draw();
+}
 cv.addEventListener('pointerdown', e => {
   if (e.pointerType === 'mouse' && e.button !== 0) return;
+  if (e.pointerType === 'touch' && (penId !== null || performance.now() < penUntil)) { e.preventDefault(); return; }
+  if (e.pointerType === 'pen') { penId = e.pointerId; if (gst && (activeType === 'touch' || gst.type === 'multi')) cancelGesture(); }
   try { cv.setPointerCapture(e.pointerId); } catch (_) { }
   e.preventDefault();
   if (e.isPrimary && !gst) ptrs.clear(); // primo dito: dimentica contatti rimasti appesi
   const p = evPt(e); ptrs.set(e.pointerId, { p, at: performance.now() });
-  if (e.pointerType !== 'mouse' && (gst || ptrs.size > 1) && tryMulti(e.pointerId)) return;
+  if (e.pointerType === 'touch' && (gst || ptrs.size > 1) && tryMulti(e.pointerId)) return;
   if (activeId !== null || gst) return; // altre pressioni ignorate
-  activeId = e.pointerId; U.lastClient = { x: e.clientX, y: e.clientY };
+  activeId = e.pointerId; activeType = e.pointerType; U.lastClient = { x: e.clientX, y: e.clientY };
   onDown(p, e);
 });
 cv.addEventListener('pointermove', e => {
@@ -1376,6 +1386,7 @@ cv.addEventListener('pointermove', e => {
 });
 const endPtr = e => {
   ptrs.delete(e.pointerId);
+  if (e.pointerId === penId) { penId = null; penUntil = performance.now() + 500; }
   if (gst && gst.type === 'multi') { if (gst.ids.delete(e.pointerId)) { if (gst.ids.size) rebase(); else multiEnd(); } return; }
   if (e.pointerId !== activeId) return; activeId = null; onUp(evPt(e));
 };
@@ -1851,6 +1862,7 @@ $('#helpBtn').onclick = () => openDrawer('guida');
 const GUIDA = [
   ['Gesti di base', [
     'Con <b>un dito</b> disegni, tracci e sposti; con <b>due o tre dita</b> appoggiate su uno strumento lo prendi, lo sposti e lo ruoti insieme.',
+    'Con la <b>penna della LIM</b> l’aggancio è più preciso (punti, incroci, quadretti) e la mano appoggiata viene ignorata mentre la penna tocca.',
     'In alto: <b>2H</b> per i tratti sottili di costruzione, <b>HB</b> per i contorni, <b>⋯</b> per il tratteggio.',
     '<b>Annulla</b> e <b>Ripristina</b> correggono qualsiasi azione.',
     'In basso a destra: <b>ingrandisci/riduci</b>, <b>Foglio intero</b> e <b>Tratto LIM</b> (tratti più spessi solo sullo schermo, per vederli dal fondo dell’aula).']],
