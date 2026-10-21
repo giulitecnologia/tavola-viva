@@ -52,6 +52,14 @@ button{font:inherit;color:inherit}
 .tog::before{content:'';width:18px;height:18px;border-radius:5px;border:2px solid var(--line);flex:none;box-sizing:border-box}
 .tog.on::before{background:var(--accent);border-color:var(--accent);box-shadow:inset 0 0 0 2px #fff}
 .sp{border-top:1px solid var(--line);margin:4px 0}
+.grpl{display:flex;flex-direction:column;gap:4px}
+.gi{min-height:40px;border:1px solid var(--line);border-radius:10px;background:#fff;font-weight:600;cursor:pointer;text-align:left;padding:0 10px;touch-action:manipulation;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gi.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.mini{min-height:40px;border:1px solid var(--line);border-radius:10px;background:#fff;font-weight:600;cursor:pointer;touch-action:manipulation;font-size:13.5px}
+.mini.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.mini[disabled]{opacity:.4;cursor:default}
+.sec-h{font-weight:700;font-size:14px;color:var(--accent);margin-top:2px}
 
 /* barra in basso: apertura dei piani */
 #bottom{grid-row:3;grid-column:2;display:flex;align-items:center;gap:12px;padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));background:var(--chrome);border-top:1px solid var(--line);flex-wrap:wrap}
@@ -74,7 +82,7 @@ button{font:inherit;color:inherit}
   </header>
 
   <nav id="solids" aria-label="Solidi">
-    <div class="h">Solidi</div>
+    <div class="h">Tipo di solido</div>
     <button class="sol" data-s="parallelepipedo"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M5 11l7-5h15l-7 5zM5 11v15h15V11M20 26l7-5V6"/></svg>Parallele&shy;pipedo</button>
     <button class="sol" data-s="cubo"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M6 11l6-5h14l-6 5zM6 11v15h14V11M20 26l6-5V6"/></svg>Cubo</button>
     <button class="sol" data-s="prisma3"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M6 26h14l6-5M6 26l7-6 13 1M6 26V10l7-5v15M20 26V10L6 10M13 5l13 1v15M20 10l6-4"/></svg>Prisma triangolare</button>
@@ -116,9 +124,10 @@ let TH = THEMES.bosco;
 try { TH = THEMES[JSON.parse(localStorage.getItem('tavolaviva.tema'))] || TH; } catch (_) { }
 for (const [v, k] of [['--accent', 'accent'], ['--accent-soft', 'soft'], ['--desk', 'desk'], ['--chrome', 'chrome'], ['--chrome-2', 'chrome2'], ['--line', 'line']]) document.documentElement.style.setProperty(v, TH[k]);
 document.querySelector('meta[name="theme-color"]').content = TH.accent;
+const SEC = '#d9480f'; // colore della sezione e del piano secante
 
-/* ---------- solidi ----------
-   Coordinate del triedro (cm): x lungo la linea di terra (il solido sta a x < 0, PL è il piano x = 0),
+/* ---------- stato ----------
+   Coordinate del triedro (cm): x lungo la linea di terra (i solidi stanno a x < 0, PL è il piano x = 0),
    y = distanza da PV (verso chi guarda), z = altezza sopra PO.
    Metodo europeo: PO si ribalta in basso ruotando attorno alla linea di terra, PL si ribalta a destra. */
 const KINDS = {
@@ -126,93 +135,166 @@ const KINDS = {
   cubo: { n: 'Cubo', dims: [['l', 'Spigolo', 4]] },
   prisma3: { n: 'Prisma triangolare', dims: [['l', 'Lato di base', 5], ['h', 'Altezza', 6]] },
   prisma6: { n: 'Prisma esagonale', dims: [['l', 'Lato di base', 2.5], ['h', 'Altezza', 6]] },
-  piramide: { n: 'Piramide a base quadrata', dims: [['l', 'Lato di base', 5], ['h', 'Altezza', 6]] },
+  piramide: { n: 'Piramide quadrata', dims: [['l', 'Lato di base', 5], ['h', 'Altezza', 6]] },
   cilindro: { n: 'Cilindro', dims: [['d', 'Diametro', 4], ['h', 'Altezza', 6]] },
   cono: { n: 'Cono', dims: [['d', 'Diametro', 5], ['h', 'Altezza', 6]] }
 };
-const S = { kind: 'parallelepipedo', dim: {}, dPV: 2, dPL: 2, rot: 0, open: 0, rays: true, hidden: true, solid: true, labels: true, recall: true };
-for (const k in KINDS) S.dim[k] = Object.fromEntries(KINDS[k].dims.map(d => [d[0], d[2]]));
-try { Object.assign(S, JSON.parse(localStorage.getItem('tavolaviva.proiezioni')) || {}); } catch (_) { }
-S.open = 0;
+const defDims = k => Object.fromEntries(KINDS[k].dims.map(d => [d[0], d[2]]));
+const newSolid = (kind, o) => Object.assign({ kind, dims: { [kind]: defDims(kind) }, dPV: 2, dPL: 2, z0: 0, rot: 0 }, o || {});
+const S = { solids: [newSolid('parallelepipedo')], act: 0, open: 0, rays: true, hidden: true, solid: true, labels: true, recall: true, sheet: true,
+  sec: { on: false, type: 'oriz', pos: 3, ang: 30, cut: true } };
+try {
+  const o = JSON.parse(localStorage.getItem('tavolaviva.proiezioni')) || {};
+  if (o.solids) Object.assign(S, o); // versione attuale
+  else if (o.kind) S.solids = [newSolid(o.kind, { dims: { [o.kind]: (o.dim || {})[o.kind] || defDims(o.kind) }, dPV: o.dPV ?? 2, dPL: o.dPL ?? 2, rot: o.rot || 0 })]; // versione precedente con un solo solido
+  for (const k of ['rays', 'hidden', 'solid', 'labels', 'recall']) if (k in o) S[k] = o[k];
+} catch (_) { }
+S.open = 0; S.act = clamp(S.act || 0, 0, S.solids.length - 1);
 const saveS = () => { try { const { open, ...keep } = S; localStorage.setItem('tavolaviva.proiezioni', JSON.stringify(keep)); } catch (_) { } };
+const dimsOf = sd => sd.dims[sd.kind] || (sd.dims[sd.kind] = defDims(sd.kind));
 
-// poligono di base (centrato nell'origine) e solido: vertici, facce, spigoli
+/* ---------- geometria dei solidi ---------- */
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+function norm(a) { const l = Math.hypot(...a) || 1; return a.map(v => v / l); }
 function regular(n, R, a0) { return Array.from({ length: n }, (_, i) => [R * Math.cos(a0 + i * 2 * Math.PI / n), R * Math.sin(a0 + i * 2 * Math.PI / n)]); }
-function prismOf(base, h, smooth) {
+function prismOf(base, h) {
   const n = base.length, V = [], F = [];
   base.forEach(([x, y]) => V.push([x, y, 0])); base.forEach(([x, y]) => V.push([x, y, h]));
   F.push({ v: [...Array(n).keys()].reverse() }); F.push({ v: [...Array(n).keys()].map(i => i + n) });
   for (let i = 0; i < n; i++) { const j = (i + 1) % n; F.push({ v: [i, j, j + n, i + n], lat: true }); }
-  return { V, F, smooth, axisH: h };
+  return { V, F };
 }
-function pyramidOf(base, h, smooth) {
+function pyramidOf(base, h) {
   const n = base.length, V = base.map(([x, y]) => [x, y, 0]); V.push([0, 0, h]);
   const F = [{ v: [...Array(n).keys()].reverse() }];
   for (let i = 0; i < n; i++) F.push({ v: [i, (i + 1) % n, n], lat: true });
-  return { V, F, smooth, axisH: h };
+  return { V, F };
 }
-function makeSolid() {
-  const d = S.dim[S.kind]; let m;
-  // base orientata con un lato parallelo a PV (e alla linea di terra)
-  if (S.kind === 'parallelepipedo') m = prismOf([[-d.a / 2, -d.b / 2], [d.a / 2, -d.b / 2], [d.a / 2, d.b / 2], [-d.a / 2, d.b / 2]], d.h);
-  else if (S.kind === 'cubo') m = prismOf([[-d.l / 2, -d.l / 2], [d.l / 2, -d.l / 2], [d.l / 2, d.l / 2], [-d.l / 2, d.l / 2]], d.l);
-  else if (S.kind === 'prisma3') m = prismOf(regular(3, d.l / Math.sqrt(3), -Math.PI / 2 + Math.PI), d.h);
-  else if (S.kind === 'prisma6') m = prismOf(regular(6, d.l, 0), d.h);
-  else if (S.kind === 'piramide') m = pyramidOf(regular(4, d.l / Math.SQRT2, Math.PI / 4), d.h);
-  else if (S.kind === 'cilindro') m = prismOf(regular(64, d.d / 2, 0), d.h, true);
-  else m = pyramidOf(regular(64, d.d / 2, 0), d.h, true);
-  m.round = S.kind === 'cilindro' || S.kind === 'cono';
-  // rotazione attorno all'asse verticale, poi posizione: distanze dal PV e dal PL misurate dal punto più vicino
-  const c = Math.cos(S.rot * DEG), s = Math.sin(S.rot * DEG);
-  m.V = m.V.map(([x, y, z]) => [x * c - y * s, x * s + y * c, z]);
-  const maxX = Math.max(...m.V.map(p => p[0])), minY = Math.min(...m.V.map(p => p[1]));
-  const ox = -S.dPL - maxX, oy = S.dPV - minY;
-  m.V = m.V.map(([x, y, z]) => [x + ox, y + oy, z]); m.axis = [ox, oy];
-  // normali (metodo di Newell) e spigoli con le due facce adiacenti
-  for (const f of m.F) { let nx = 0, ny = 0, nz = 0; const P = f.v.map(i => m.V[i]); for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length]; nx += (a[1] - b[1]) * (a[2] + b[2]); ny += (a[2] - b[2]) * (a[0] + b[0]); nz += (a[0] - b[0]) * (a[1] + b[1]); } const l = Math.hypot(nx, ny, nz) || 1; f.n = [nx / l, ny / l, nz / l]; }
+// completa un solido: normali (metodo di Newell) e spigoli con le facce adiacenti
+function finish(m) {
+  for (const f of m.F) { let nx = 0, ny = 0, nz = 0; const P = f.v.map(i => m.V[i]); for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length]; nx += (a[1] - b[1]) * (a[2] + b[2]); ny += (a[2] - b[2]) * (a[0] + b[0]); nz += (a[0] - b[0]) * (a[1] + b[1]); } const l = Math.hypot(nx, ny, nz) || 1; f.n = [nx / l, ny / l, nz / l]; f.q = P[0]; }
   const E = new Map();
-  m.F.forEach((f, fi) => f.v.forEach((a, i) => { const b = f.v[(i + 1) % f.v.length], k = a < b ? a + '-' + b : b + '-' + a; if (!E.has(k)) E.set(k, { a: Math.min(a, b), b: Math.max(a, b), f: [] }); E.get(k).f.push(fi); }));
-  m.E = [...E.values()].map(e => Object.assign(e, { smooth: m.smooth && e.f.every(fi => m.F[fi].lat) }));
-  // punti notevoli per raggi proiettanti e linee di richiamo
-  if (m.round) {
-    const [ax, ay] = m.axis, r = S.dim[S.kind].d / 2, h = S.dim[S.kind].h, top = S.kind === 'cilindro';
-    m.key = [[ax - r, ay, 0], [ax + r, ay, 0], [ax, ay - r, 0], [ax, ay + r, 0]];
-    if (top) m.key.push([ax - r, ay, h], [ax + r, ay, h], [ax, ay - r, h], [ax, ay + r, h]); else m.key.push([ax, ay, h]);
-  } else m.key = m.V.slice();
+  m.F.forEach((f, fi) => f.v.forEach((a, i) => { const b = f.v[(i + 1) % f.v.length]; if (a === b) return; const k = a < b ? a + '-' + b : b + '-' + a; if (!E.has(k)) E.set(k, { a: Math.min(a, b), b: Math.max(a, b), f: [] }); E.get(k).f.push(fi); }));
+  m.E = [...E.values()].map(e => Object.assign(e, { smooth: m.round && e.f.length === 2 && e.f.every(fi => m.F[fi].lat) }));
   return m;
 }
+function buildSolid(sd) {
+  const d = dimsOf(sd); let m;
+  // base orientata con un lato parallelo a PV (e alla linea di terra)
+  if (sd.kind === 'parallelepipedo') m = prismOf([[-d.a / 2, -d.b / 2], [d.a / 2, -d.b / 2], [d.a / 2, d.b / 2], [-d.a / 2, d.b / 2]], d.h);
+  else if (sd.kind === 'cubo') m = prismOf([[-d.l / 2, -d.l / 2], [d.l / 2, -d.l / 2], [d.l / 2, d.l / 2], [-d.l / 2, d.l / 2]], d.l);
+  else if (sd.kind === 'prisma3') m = prismOf(regular(3, d.l / Math.sqrt(3), Math.PI / 2), d.h);
+  else if (sd.kind === 'prisma6') m = prismOf(regular(6, d.l, 0), d.h);
+  else if (sd.kind === 'piramide') m = pyramidOf(regular(4, d.l / Math.SQRT2, Math.PI / 4), d.h);
+  else if (sd.kind === 'cilindro') m = prismOf(regular(64, d.d / 2, 0), d.h);
+  else m = pyramidOf(regular(64, d.d / 2, 0), d.h);
+  m.round = sd.kind === 'cilindro' || sd.kind === 'cono'; m.sd = sd;
+  // rotazione attorno all'asse verticale, poi posizione: distanze da PV e PL misurate dal punto più vicino; base all'altezza z0
+  const c = Math.cos(sd.rot * DEG), s = Math.sin(sd.rot * DEG);
+  m.V = m.V.map(([x, y, z]) => [x * c - y * s, x * s + y * c, z]);
+  const maxX = Math.max(...m.V.map(p => p[0])), minY = Math.min(...m.V.map(p => p[1]));
+  const ox = -sd.dPL - maxX, oy = sd.dPV - minY;
+  m.V = m.V.map(([x, y, z]) => [x + ox, y + oy, z + sd.z0]); m.axis = [ox, oy]; m.z0 = sd.z0; m.z1 = sd.z0 + (d.h ?? d.l);
+  if (m.round) { const r = d.d / 2, z0 = sd.z0, z1 = m.z1; m.key = [[ox - r, oy, z0], [ox + r, oy, z0], [ox, oy - r, z0], [ox, oy + r, z0]]; if (sd.kind === 'cilindro') m.key.push([ox - r, oy, z1], [ox + r, oy, z1], [ox, oy - r, z1], [ox, oy + r, z1]); else m.key.push([ox, oy, z1]); }
+  else m.key = m.V.slice();
+  return finish(m);
+}
 
-/* ---------- viste ortogonali (metodo europeo) ----------
-   per ogni vista: direzione verso l'osservatore e passaggio dal 3D alle coordinate del piano */
+/* ---------- sezione: piano secante e taglio dei solidi ---------- */
+// il piano tiene la parte con n·p ≤ d; la faccia di taglio guarda verso +n, cioè verso la parte tolta
+function secPlane(meshes) {
+  const sc = S.sec; if (!sc.on || !meshes.length) return null;
+  const xs = meshes.flatMap(m => m.V.map(p => p[0])), xc = (Math.min(...xs) + Math.max(...xs)) / 2;
+  if (sc.type === 'oriz') return { n: [0, 0, 1], d: sc.pos, name: 'orizzontale' };
+  if (sc.type === 'front') return { n: [0, 1, 0], d: sc.pos, name: 'frontale' };
+  if (sc.type === 'lat') return { n: [-1, 0, 0], d: sc.pos, name: 'laterale' };
+  const a = sc.ang * DEG, n = [-Math.sin(a), 0, Math.cos(a)]; // perpendicolare a PV, inclinato di a rispetto a PO, alto pos sull'asse dei solidi
+  return { n, d: dot3(n, [xc, 0, sc.pos]), name: 'inclinato', xc };
+}
+function clipMesh(m, pl, keepOut) {
+  const sgn = keepOut ? -1 : 1, n = pl.n.map(v => v * sgn), d = pl.d * sgn, side = p => dot3(n, p) - d, EPS = 1e-7;
+  const P = [], key = new Map(), idx = p => { const k = p.map(v => Math.round(v * 1e5)).join(','); if (!key.has(k)) { key.set(k, P.length); P.push(p); } return key.get(k); };
+  const F = [], cut = [];
+  for (const f of m.F) {
+    const poly = f.v.map(i => m.V[i]), out = [];
+    for (let i = 0; i < poly.length; i++) {
+      const A = poly[i], Bp = poly[(i + 1) % poly.length], sa = side(A), sb = side(Bp);
+      if (sa <= EPS) out.push(A);
+      if ((sa < -EPS && sb > EPS) || (sa > EPS && sb < -EPS)) { const t = sa / (sa - sb), X = [A[0] + (Bp[0] - A[0]) * t, A[1] + (Bp[1] - A[1]) * t, A[2] + (Bp[2] - A[2]) * t]; out.push(X); }
+    }
+    const v = [...new Set(out.map(idx))]; for (const p of out) if (Math.abs(side(p)) <= 1e-6) cut.push(idx(p));
+    if (v.length >= 3) F.push({ v, lat: f.lat });
+  }
+  if (!F.length) return null;
+  const cv = [...new Set(cut)];
+  if (cv.length >= 3) { // faccia di taglio: punti ordinati intorno al loro baricentro
+    const c = cv.reduce((s, i) => [s[0] + P[i][0] / cv.length, s[1] + P[i][1] / cv.length, s[2] + P[i][2] / cv.length], [0, 0, 0]);
+    const u = norm(Math.abs(n[2]) < 0.9 ? cross(n, [0, 0, 1]) : cross(n, [1, 0, 0])), w = cross(n, u);
+    cv.sort((i, j) => Math.atan2(dot3(sub3(P[i], c), w), dot3(sub3(P[i], c), u)) - Math.atan2(dot3(sub3(P[j], c), w), dot3(sub3(P[j], c), u)));
+    F.push({ v: cv, cap: true });
+  }
+  const r = finish({ V: P, F, round: m.round, sd: m.sd, axis: m.axis, z0: m.z0, z1: m.z1 });
+  // punti notevoli: per cilindri e coni bastano gli estremi della sezione (niente richiami fitti)
+  const ext = cv.length ? [0, 1, 2].flatMap(k => [cv.reduce((a, i) => P[i][k] < P[a][k] ? i : a, cv[0]), cv.reduce((a, i) => P[i][k] > P[a][k] ? i : a, cv[0])]) : [];
+  r.key = m.key.filter(p => side(p) <= 1e-6).concat([...new Set(ext)].map(i => P[i]));
+  if (!m.round) r.key = r.V.slice();
+  return r;
+}
+
+/* ---------- viste ortogonali (metodo europeo) ---------- */
 const VIEWS = {
   PV: { t: [0, 1, 0], to2: p => [p[0], p[2]] },  // vista di fronte, su PV: (x, z)
   PO: { t: [0, 0, 1], to2: p => [p[0], p[1]] },  // vista dall'alto, su PO: (x, y)
   PL: { t: [-1, 0, 0], to2: p => [p[1], p[2]] }  // vista da sinistra, su PL: (y, z)
 };
-const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-// spigoli in vista: visibili se almeno una faccia adiacente guarda l'osservatore; per i solidi curvi solo i contorni apparenti
-function viewEdges(m, view) {
-  const front = m.F.map(f => dot3(f.n, view.t) > 1e-6), out = [];
-  for (const e of m.E) {
-    const fr = e.f.map(i => front[i]);
-    if (e.smooth) { if (fr.length === 2 && fr[0] !== fr[1]) out.push({ a: view.to2(m.V[e.a]), b: view.to2(m.V[e.b]), vis: true }); continue; }
-    out.push({ a: view.to2(m.V[e.a]), b: view.to2(m.V[e.b]), vis: fr.some(Boolean) });
+// un punto è coperto da un altro solido (convesso) se il raggio verso l'osservatore lo attraversa
+function covered(P, t, B) {
+  let s0 = 1e-4, s1 = Infinity;
+  for (const f of B.F) {
+    const a = dot3(f.n, t), b = dot3(f.n, sub3(P, f.q)) + 1e-5;
+    if (Math.abs(a) < 1e-9) { if (b > 0) return false; continue; }
+    const s = -b / a; if (a > 0) { if (s < s1) s1 = s; } else if (s > s0) s0 = s;
+    if (s0 >= s1 - 1e-6) return false;
   }
-  return out;
+  return s0 < s1 - 1e-6;
 }
-function hull(pts) { // contorno della proiezione (il solido è convesso)
+// spigoli di tutti i solidi visti dalla direzione t: visibili, nascosti dal solido stesso o coperti dagli altri
+function edgesSeen(meshes, t) {
+  const out = [];
+  meshes.forEach((m, mi) => {
+    const front = m.F.map(f => dot3(f.n, t) > 1e-6), others = meshes.filter((_, j) => j !== mi);
+    for (const e of m.E) {
+      const fr = e.f.map(i => front[i]); let own;
+      if (e.smooth) { if (!(fr.length === 2 && fr[0] !== fr[1])) continue; own = true; } else own = fr.some(Boolean);
+      const A = m.V[e.a], Bp = m.V[e.b];
+      if (!own || !others.length) { out.push({ A, B: Bp, vis: own }); continue; }
+      const L = Math.hypot(...sub3(Bp, A)), K = clamp(Math.ceil(L * 4), 2, 48); let run = null;
+      for (let k = 0; k < K; k++) {
+        const t0 = k / K, t1 = (k + 1) / K, tm = (t0 + t1) / 2, Pm = [A[0] + (Bp[0] - A[0]) * tm, A[1] + (Bp[1] - A[1]) * tm, A[2] + (Bp[2] - A[2]) * tm];
+        const vis = !others.some(o => covered(Pm, t, o));
+        if (run && run.vis === vis) run.t1 = t1; else { if (run) out.push(run); run = { t0, t1, vis, A, B: Bp }; }
+      }
+      out.push(run);
+    }
+  });
+  return out.map(r => r.t0 === undefined ? r : { A: lerp3(r.A, r.B, r.t0), B: lerp3(r.A, r.B, r.t1), vis: r.vis });
+}
+const lerp3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+function hull(pts) { // contorno della proiezione di un solido convesso
   const P = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]); if (P.length < 3) return P;
   const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]), lo = [], up = [];
   for (const p of P) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
   for (const p of P.reverse()) { while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
   return lo.slice(0, -1).concat(up.slice(0, -1));
 }
-// assi di simmetria (tratto e punto) per cilindro e cono
+// assi di simmetria (tratto e punto) di cilindri e coni
 function axesOf(m, name) {
   if (!m.round) return [];
-  const [ax, ay] = m.axis, r = S.dim[S.kind].d / 2, h = m.axisH, e = 0.6;
-  if (name === 'PV') return [[[ax, -e], [ax, h + e]]];
-  if (name === 'PL') return [[[ay, -e], [ay, h + e]]];
+  const [ax, ay] = m.axis, r = dimsOf(m.sd).d / 2, z0 = m.z0, z1 = Math.max(...m.V.map(p => p[2])), e = 0.6;
+  if (name === 'PV') return [[[ax, z0 - e], [ax, z1 + e]]];
+  if (name === 'PL') return [[[ay, z0 - e], [ay, z1 + e]]];
   return [[[ax - r - e, ay], [ax + r + e, ay]], [[ax, ay - r - e], [ax, ay + r + e]]];
 }
 
@@ -224,28 +306,36 @@ function planeTo3(name, u, v, phi) {
   return [u * s, u * c, v];                          // PL ruota attorno all'asse verticale, verso destra
 }
 
-/* ---------- camera (assonometria ortogonale) ---------- */
-const cv = $('#cv'), stage = $('#stage'), G = cv.getContext('2d');
-let DPR = 1, CW = 0, CH = 0;
-const CAM = { yaw: 38, pitch: 24, zoom: 1, px: 0, py: 0 };
-let fitS = 30, M = makeSolid(), anim = null;
-function basis() {
-  const ya = CAM.yaw * DEG, pi = CAM.pitch * DEG, c = [-Math.sin(ya) * Math.cos(pi), Math.cos(ya) * Math.cos(pi), Math.sin(pi)];
-  const d = [-c[0], -c[1], -c[2]], r = norm([-d[1], d[0], 0].map((v, i) => i < 2 ? v : 0)), up = cross(d, r);
-  return { c, r: r[0] === 0 && r[1] === 0 ? [1, 0, 0] : r, up };
+/* ---------- scena ---------- */
+let MESH = [], CUT = [], GHOST = [], PLANE = null, SECPOLY = [];
+function rebuild() {
+  MESH = S.solids.map(buildSolid); PLANE = secPlane(MESH);
+  if (PLANE && S.sec.cut) { CUT = MESH.map(m => clipMesh(m, PLANE, false)).filter(Boolean); GHOST = MESH.map(m => clipMesh(m, PLANE, true)).filter(Boolean); }
+  else { CUT = MESH.slice(); GHOST = []; }
+  SECPOLY = PLANE && !S.sec.cut ? MESH.map(m => clipMesh(m, PLANE, false)).filter(Boolean).flatMap(r => r.F.filter(f => f.cap).map(f => f.v.map(i => r.V[i]))) : []; // sezione disegnata sul solido intero
+  VCACHE = {};
 }
-const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-function norm(a) { const l = Math.hypot(...a) || 1; return a.map(v => v / l); }
-let B = basis();
-function scene() { // ingombro dei piani
-  const xs = M.V.map(p => p[0]), ys = M.V.map(p => p[1]), zs = M.V.map(p => p[2]);
+let VCACHE = {};
+function seen(name) { return VCACHE[name] || (VCACHE[name] = edgesSeen(CUT, VIEWS[name].t)); }
+function scene() { // ingombro dei piani: tiene conto di tutti i solidi interi
+  const xs = MESH.flatMap(m => m.V.map(p => p[0])), ys = MESH.flatMap(m => m.V.map(p => p[1])), zs = MESH.flatMap(m => m.V.map(p => p[2]));
   return { W: Math.max(10, -Math.min(...xs) + 3), D: Math.max(7, Math.max(...ys) + 3), H: Math.max(7, Math.max(...zs) + 3) };
 }
+
+/* ---------- camera (assonometria ortogonale) ---------- */
+const cv = $('#cv'), stage = $('#stage'), G = cv.getContext('2d');
+let DPR = 1, CW = 0, CH = 0, fitS = 30, SC = { cx: 0, cy: 0 }, anim = null;
+const CAM = { yaw: 38, pitch: 24, zoom: 1, px: 0, py: 0 };
+function basis() {
+  const ya = CAM.yaw * DEG, pi = CAM.pitch * DEG, c = [-Math.sin(ya) * Math.cos(pi), Math.cos(ya) * Math.cos(pi), Math.sin(pi)];
+  const d = [-c[0], -c[1], -c[2]], r = norm([-d[1], d[0], 0]), up = cross(d, r);
+  return { c, r, up };
+}
+let B = basis();
 function proj(p) { const s = fitS * CAM.zoom; return [CW / 2 + CAM.px + s * (dot3(p, B.r) - SC.cx), CH / 2 + CAM.py - s * (dot3(p, B.up) - SC.cy)]; }
-let SC = { cx: 0, cy: 0 };
-function fit() { // il triedro, chiuso e aperto, deve stare tutto nello schermo
+function fit() { // il triedro, chiuso e aperto (e il foglio), deve stare tutto nello schermo
   const { W, D, H } = scene(), pts = [];
-  for (const phi of [0, Math.PI / 2]) for (const [n, u, v] of [['PV', -W, 0], ['PV', -W, H], ['PV', 0, H], ['PO', -W, D], ['PO', 0, D], ['PL', D, 0], ['PL', D, H], ['PV', 0, 0]]) pts.push(planeTo3(n, u, v, phi));
+  for (const phi of [0, Math.PI / 2]) for (const [n, u, v] of [['PV', -W - 1, 0], ['PV', -W - 1, H + 1], ['PV', 0, H + 1], ['PO', -W - 1, D + 2.2], ['PO', 0, D + 2.2], ['PL', D + 1, 0], ['PL', D + 1, H + 1], ['PV', 0, 0]]) pts.push(planeTo3(n, u, v, phi));
   const xs = pts.map(p => dot3(p, B.r)), ys = pts.map(p => dot3(p, B.up));
   const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
   SC = { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 }; fitS = Math.min((CW - 40) / (x1 - x0), (CH - 40) / (y1 - y0));
@@ -255,102 +345,196 @@ function layout() { const r = stage.getBoundingClientRect(); DPR = window.device
 /* ---------- disegno ---------- */
 const INK = '#1c2126', THIN = '#7f8c98';
 let raf = 0; const draw = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; render(); }); };
-function line3(a, b, w, col, dash) { const p = proj(a), q = proj(b); G.beginPath(); G.moveTo(p[0], p[1]); G.lineTo(q[0], q[1]); G.lineWidth = w; G.strokeStyle = col; G.setLineDash(dash || []); G.stroke(); }
-function poly3(P, fill, stroke, w) { G.beginPath(); P.forEach((p, i) => { const q = proj(p); i ? G.lineTo(q[0], q[1]) : G.moveTo(q[0], q[1]); }); G.closePath(); if (fill) { G.fillStyle = fill; G.fill(); } if (stroke) { G.lineWidth = w || 1; G.strokeStyle = stroke; G.setLineDash([]); G.stroke(); } }
-function text3(p, t, col, size, align) { const q = proj(p); G.font = `700 ${size}px ${getComputedStyle(document.body).fontFamily}`; G.fillStyle = col; G.textAlign = align || 'center'; G.textBaseline = 'middle'; G.lineWidth = 4; G.strokeStyle = 'rgba(255,255,255,.9)'; G.setLineDash([]); G.strokeText(t, q[0], q[1]); G.fillText(t, q[0], q[1]); }
 const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+function line3(a, b, w, col, dash) { const p = proj(a), q = proj(b); G.beginPath(); G.moveTo(p[0], p[1]); G.lineTo(q[0], q[1]); G.lineWidth = w; G.strokeStyle = col; G.setLineDash(dash || []); G.stroke(); }
+function path3(P) { G.beginPath(); P.forEach((p, i) => { const q = proj(p); i ? G.lineTo(q[0], q[1]) : G.moveTo(q[0], q[1]); }); G.closePath(); }
+function poly3(P, fill, stroke, w) { path3(P); if (fill) { G.fillStyle = fill; G.fill(); } if (stroke) { G.lineWidth = w || 1; G.strokeStyle = stroke; G.setLineDash([]); G.stroke(); } }
+function hatch3(P, col, gap) { // tratteggio a 45° della sezione
+  const Q = P.map(proj), xs = Q.map(q => q[0]), ys = Q.map(q => q[1]), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  G.save(); path3(P); G.clip(); G.beginPath();
+  for (let k = x0 - (y1 - y0); k < x1; k += gap) { G.moveTo(k, y1); G.lineTo(k + (y1 - y0), y0); }
+  G.lineWidth = 1.3; G.strokeStyle = col; G.setLineDash([]); G.stroke(); G.restore();
+}
+function text3(p, t, col, size, align) { const q = proj(p); G.font = `700 ${size}px ${getComputedStyle(document.body).fontFamily}`; G.fillStyle = col; G.textAlign = align || 'center'; G.textBaseline = 'middle'; G.lineWidth = 4; G.strokeStyle = 'rgba(255,255,255,.9)'; G.setLineDash([]); G.strokeText(t, q[0], q[1]); G.fillText(t, q[0], q[1]); }
+function arrowHead(a, b, col, size) { const p = proj(a), q = proj(b), an = Math.atan2(q[1] - p[1], q[0] - p[0]); G.beginPath(); G.moveTo(q[0], q[1]); G.lineTo(q[0] - size * Math.cos(an - 0.45), q[1] - size * Math.sin(an - 0.45)); G.lineTo(q[0] - size * Math.cos(an + 0.45), q[1] - size * Math.sin(an + 0.45)); G.closePath(); G.fillStyle = col; G.fill(); }
+// traccia del piano secante su un piano di proiezione (rettangolo in coordinate del piano)
+function traceOn(name, U0, U1, V0, V1) {
+  if (!PLANE) return null; const f = (u, v) => dot3(PLANE.n, planeTo3(name, u, v, 0)) - PLANE.d;
+  const C = [[U0, V0], [U1, V0], [U1, V1], [U0, V1]], pts = [];
+  for (let i = 0; i < 4; i++) { const a = C[i], b = C[(i + 1) % 4], fa = f(...a), fb = f(...b); if ((fa <= 0 && fb > 0) || (fa > 0 && fb <= 0)) { const t = fa / (fa - fb); pts.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]); } }
+  return pts.length >= 2 ? [pts[0], pts[1]] : null;
+}
+function planeQuad(W, D, H) { // il piano secante dentro il triedro
+  const box = [[-W, 0, 0], [0, 0, 0], [0, D, 0], [-W, D, 0], [-W, 0, H], [0, 0, H], [0, D, H], [-W, D, H]], E = [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]], pts = [];
+  for (const [i, j] of E) { const a = box[i], b = box[j], fa = dot3(PLANE.n, a) - PLANE.d, fb = dot3(PLANE.n, b) - PLANE.d; if ((fa <= 0 && fb > 0) || (fa > 0 && fb <= 0)) pts.push(lerp3(a, b, fa / (fa - fb))); }
+  if (pts.length < 3) return null; const c = pts.reduce((s, p) => [s[0] + p[0] / pts.length, s[1] + p[1] / pts.length, s[2] + p[2] / pts.length], [0, 0, 0]);
+  const u = norm(Math.abs(PLANE.n[2]) < 0.9 ? cross(PLANE.n, [0, 0, 1]) : cross(PLANE.n, [1, 0, 0])), w = cross(PLANE.n, u);
+  return pts.sort((p, q) => Math.atan2(dot3(sub3(p, c), w), dot3(sub3(p, c), u)) - Math.atan2(dot3(sub3(q, c), w), dot3(sub3(q, c), u)));
+}
+
 function render() {
   G.setTransform(DPR, 0, 0, DPR, 0, 0); G.clearRect(0, 0, CW, CH);
-  const phi = S.open * DEG, { W, D, H } = scene(), s = fitS * CAM.zoom, lw = Math.max(1.6, s * 0.06), thin = Math.max(1, s * 0.03);
-  const P = (n, u, v) => planeTo3(n, u, v, phi);
+  const phi = S.open * DEG, { W, D, H } = scene(), s = fitS * CAM.zoom, lw = Math.max(1.6, s * 0.06), thin = Math.max(1, s * 0.03), fs = clamp(s * 0.55, 13, 24);
+  const P = (n, u, v) => planeTo3(n, u, v, phi), opened = S.open >= 89.5, ko = clamp((S.open - 35) / 50, 0, 1);
+  // il foglio da disegno: compare mentre i piani si aprono, perché è lì che finiscono le tre viste
+  if (S.sheet && ko > 0) {
+    G.save(); G.globalAlpha = ko; const F = [[-W - 1, -D - 1], [D + 1, -D - 1], [D + 1, H + 1], [-W - 1, H + 1]];
+    poly3(F.map(([u, v]) => [u, 0, v]), '#ffffff', '#1c2126', 2);
+    poly3([[-W - 0.5, -D - 0.5], [D + 0.5, -D - 0.5], [D + 0.5, H + 0.5], [-W - 0.5, H + 0.5]].map(([u, v]) => [u, 0, v]), null, '#1c2126', 1.2); // squadratura
+    text3([D + 1, 0, -D - 1.6], 'Foglio da disegno', TH.accent, fs * 0.8, 'right'); // sotto il foglio, così non copre il bordo
+    G.restore();
+  }
   // i tre piani, con un leggero quadrettato da 1 cm
-  const planes = [['PV', [[-W, 0], [0, 0], [0, H], [-W, H]], 'rgba(255,255,255,.88)'], ['PO', [[-W, 0], [0, 0], [0, D], [-W, D]], 'rgba(250,252,251,.88)'], ['PL', [[0, 0], [D, 0], [D, H], [0, H]], 'rgba(246,249,248,.88)']];
-  for (const [n, Q, fill] of planes) {
-    poly3(Q.map(([u, v]) => P(n, u, v)), fill, rgba(TH.accent, .55), 1.4);
-    G.save(); G.globalAlpha = .35; const [u0, v0] = Q[0], [u1, v1] = Q[2];
-    for (let u = Math.ceil(Math.min(u0, u1)); u <= Math.max(u0, u1); u++) line3(P(n, u, Math.min(v0, v1)), P(n, u, Math.max(v0, v1)), 1, '#a9bfcb');
-    for (let v = Math.ceil(Math.min(v0, v1)); v <= Math.max(v0, v1); v++) line3(P(n, Math.min(u0, u1), v), P(n, Math.max(u0, u1), v), 1, '#a9bfcb');
+  const planes = [['PV', [-W, 0, 0, H], 'rgba(255,255,255,.88)'], ['PO', [-W, 0, 0, D], 'rgba(250,252,251,.88)'], ['PL', [0, D, 0, H], 'rgba(246,249,248,.88)']];
+  for (const [n, [u0, u1, v0, v1], fill] of planes) {
+    poly3([[u0, v0], [u1, v0], [u1, v1], [u0, v1]].map(([u, v]) => P(n, u, v)), fill, rgba(TH.accent, .55), 1.4);
+    G.save(); G.globalAlpha = .35;
+    for (let u = Math.ceil(u0); u <= u1; u++) line3(P(n, u, v0), P(n, u, v1), 1, '#a9bfcb');
+    for (let v = Math.ceil(v0); v <= v1; v++) line3(P(n, u0, v), P(n, u1, v), 1, '#a9bfcb');
+    G.restore();
+  }
+  // il movimento dei piani: archi con la freccia
+  if (S.open > 0.5 && S.open < 89.5) {
+    G.save(); G.globalAlpha = .9; const arcPO = [], arcPL = [];
+    for (let k = 0; k <= 30; k++) { const a = k / 30 * Math.PI / 2; arcPO.push([-W, D * Math.cos(a), -D * Math.sin(a)]); arcPL.push([D * Math.sin(a), D * Math.cos(a), H]); }
+    for (const arc of [arcPO, arcPL]) { for (let k = 1; k < arc.length; k++) line3(arc[k - 1], arc[k], 2, TH.accent, [7, 5]); arrowHead(arc[arc.length - 2], arc[arc.length - 1], TH.accent, 12); }
     G.restore();
   }
   // linea di terra e spigoli del triedro
   line3([-W, 0, 0], [0, 0, 0], 2.2, INK); line3(P('PO', 0, 0), P('PO', 0, D), 1.6, rgba(TH.accent, .8)); line3(P('PL', 0, 0), P('PL', 0, H), 1.6, rgba(TH.accent, .8));
-  const opened = S.open >= 89.5;
-  if (opened) line3([0, 0, 0], [D, 0, -D], thin, THIN, [8, 5]); // retta a 45° per riportare le misure fra PO e PL
+  if (opened) line3([0, 0, 0], [D, 0, -D], thin, THIN, [8, 5]); // retta a 45°
+  // tracce del piano secante sui tre piani
+  if (PLANE) for (const [n, [u0, u1, v0, v1]] of planes) { const tr = traceOn(n, u0, u1, v0, v1); if (tr) { line3(P(n, ...tr[0]), P(n, ...tr[1]), 2.2, SEC, [14, 5, 3, 5]); text3(P(n, ...tr[1]), 't', SEC, fs * 0.8); } }
   // linee di richiamo, a piani aperti
   if (opened && S.recall) {
-    const ks = M.key, X = [...new Set(ks.map(p => p[0].toFixed(3)))].map(Number), Y = [...new Set(ks.map(p => p[1].toFixed(3)))].map(Number), Z = [...new Set(ks.map(p => p[2].toFixed(3)))].map(Number);
+    const ks = CUT.flatMap(m => m.key), uq = a => [...new Set(a.map(v => v.toFixed(3)))].map(Number), X = uq(ks.map(p => p[0])), Y = uq(ks.map(p => p[1])), Z = uq(ks.map(p => p[2]));
     const xmin = Math.min(...X), zmax = Math.max(...Z), ymax = Math.max(...Y);
-    G.save(); G.globalAlpha = .9;
     for (const x of X) line3([x, 0, zmax], [x, 0, -ymax], thin, '#9aa7b2');
     for (const z of Z) line3([xmin, 0, z], [ymax, 0, z], thin, '#9aa7b2');
     for (const y of Y) { line3([xmin, 0, -y], [y, 0, -y], thin, '#9aa7b2'); line3([y, 0, -y], [y, 0, zmax], thin, '#9aa7b2'); }
-    G.restore();
   }
   // proiezioni sui tre piani
   for (const name of ['PV', 'PO', 'PL']) {
-    const v = VIEWS[name], hp = hull(M.V.map(v.to2)), ed = viewEdges(M, v);
-    poly3(hp.map(([u, w]) => P(name, u, w)), rgba(TH.accent, .14));
-    if (S.hidden) for (const e of ed) if (!e.vis) line3(P(name, ...e.a), P(name, ...e.b), thin * 1.3, INK, [Math.max(4, s * .18), Math.max(3, s * .12)]);
-    for (const e of ed) if (e.vis) line3(P(name, ...e.a), P(name, ...e.b), lw, INK);
-    for (const [a, b] of axesOf(M, name)) line3(P(name, ...a), P(name, ...b), thin, '#4f5b63', [Math.max(10, s * .5), 4, 2, 4]);
+    const v = VIEWS[name];
+    for (const m of CUT) poly3(hull(m.V.map(v.to2)).map(([u, w]) => P(name, u, w)), rgba(TH.accent, .14));
+    for (const m of CUT) for (const f of m.F) if (f.cap && dot3(f.n, v.t) > 1e-6) { const Q = f.v.map(i => P(name, ...v.to2(m.V[i]))); poly3(Q, rgba(SEC, .12)); hatch3(Q, rgba(SEC, .85), Math.max(6, s * 0.28)); }
+    const ed = seen(name);
+    if (S.hidden) for (const e of ed) if (!e.vis) line3(P(name, ...v.to2(e.A)), P(name, ...v.to2(e.B)), thin * 1.3, INK, [Math.max(4, s * .18), Math.max(3, s * .12)]);
+    for (const e of ed) if (e.vis) line3(P(name, ...v.to2(e.A)), P(name, ...v.to2(e.B)), lw, INK);
+    for (const m of CUT) for (const [a, b] of axesOf(m, name)) line3(P(name, ...a), P(name, ...b), thin, '#4f5b63', [Math.max(10, s * .5), 4, 2, 4]);
   }
   // raggi proiettanti (a piani chiusi)
   if (S.rays && S.open < 0.5) {
     G.save(); G.globalAlpha = .75;
-    for (const p of M.key) { line3(p, [p[0], 0, p[2]], 1.2, '#e8770e', [5, 4]); line3(p, [p[0], p[1], 0], 1.2, '#e8770e', [5, 4]); line3(p, [0, p[1], p[2]], 1.2, '#e8770e', [5, 4]); }
+    for (const p of CUT.flatMap(m => m.key)) { line3(p, [p[0], 0, p[2]], 1.2, '#e8770e', [5, 4]); line3(p, [p[0], p[1], 0], 1.2, '#e8770e', [5, 4]); line3(p, [0, p[1], p[2]], 1.2, '#e8770e', [5, 4]); }
     G.restore();
   }
-  // il solido: sparisce mentre i piani si aprono
+  // i solidi: spariscono mentre i piani si aprono
   const sa = S.solid ? 1 - clamp((S.open - 25) / 45, 0, 1) : 0;
   if (sa > 0.01) {
     G.save(); G.globalAlpha = sa;
-    const front = M.F.map(f => dot3(f.n, B.c) > 1e-6);
-    const faces = M.F.map((f, i) => ({ f, i, d: Math.max(...f.v.map(k => dot3(M.V[k], B.c))) })).filter(o => front[o.i]).sort((a, b) => a.d - b.d);
-    for (const e of M.E) { if (e.smooth) continue; if (!e.f.some(i => front[i]) && S.hidden) line3(M.V[e.a], M.V[e.b], thin, '#6b777b', [5, 4]); }
-    const LIGHT = norm([-0.4, 0.6, 0.9]);
-    for (const o of faces) { const lit = Math.max(0, dot3(o.f.n, LIGHT)), F = o.f.v.map(k => M.V[k]); poly3(F, 'rgba(255,255,255,.82)'); poly3(F, rgba(TH.accent, 0.06 + 0.22 * (1 - lit))); } // facce piene, più scure se in ombra
-    for (const e of M.E) { const fr = e.f.map(i => front[i]); if (e.smooth ? fr[0] !== fr[1] : fr.some(Boolean)) line3(M.V[e.a], M.V[e.b], lw * 0.9, INK); }
+    if (PLANE) { const pq = planeQuad(W, D, H); if (pq) poly3(pq, rgba(SEC, .10), rgba(SEC, .6), 1.4); } // il piano secante
+    for (const m of GHOST) for (const e of m.E) if (!e.smooth) line3(m.V[e.a], m.V[e.b], 1, rgba(INK, .22), [3, 4]); // la parte tolta, appena accennata
+    const LIGHT = norm([-0.4, 0.6, 0.9]), faces = [];
+    CUT.forEach(m => m.F.forEach(f => { if (dot3(f.n, B.c) > 1e-6) faces.push({ m, f, d: Math.max(...f.v.map(k => dot3(m.V[k], B.c))) }); }));
+    faces.sort((a, b) => a.d - b.d);
+    const ed = edgesSeen(CUT, B.c);
+    if (S.hidden) for (const e of ed) if (!e.vis) line3(e.A, e.B, thin, '#6b777b', [5, 4]);
+    for (const o of faces) {
+      const F = o.f.v.map(k => o.m.V[k]);
+      if (o.f.cap) { poly3(F, 'rgba(255,255,255,.9)'); poly3(F, rgba(SEC, .22)); hatch3(F, rgba(SEC, .8), Math.max(6, s * 0.28)); continue; }
+      const lit = Math.max(0, dot3(o.f.n, LIGHT)); poly3(F, 'rgba(255,255,255,.82)'); poly3(F, rgba(TH.accent, 0.06 + 0.22 * (1 - lit)));
+    }
+    for (const e of ed) if (e.vis) line3(e.A, e.B, lw * 0.9, INK);
+    for (const pg of SECPOLY) { poly3(pg, rgba(SEC, .18), SEC, 2); hatch3(pg, rgba(SEC, .8), Math.max(6, s * 0.28)); }
     G.restore();
   }
-  // etichette
+  // vera forma della sezione inclinata: riquadro a parte
+  if (PLANE && PLANE.name === 'inclinato') drawTrueShape();
   if (S.labels) {
-    const fs = clamp(s * 0.55, 13, 24);
     text3(P('PV', -W + 0.9, H - 0.7), 'PV', TH.accent, fs); text3(P('PO', -W + 0.9, D - 0.7), 'PO', TH.accent, fs); text3(P('PL', D - 0.9, H - 0.7), 'PL', TH.accent, fs);
     text3([-W - 0.2, 0, 0], 'LT', INK, fs * 0.85, 'right');
   }
 }
+function drawTrueShape() {
+  const caps = CUT.flatMap(m => m.F.filter(f => f.cap).map(f => f.v.map(i => m.V[i]))); if (!caps.length) return;
+  const n = PLANE.n, u = norm(cross([0, 1, 0], n)), w = [0, 1, 0]; // coordinate nel piano secante
+  const polys = caps.map(c => c.map(p => [dot3(p, u), dot3(p, w)])), all = polys.flat(), xs = all.map(p => p[0]), ys = all.map(p => p[1]);
+  const bw = 230, bh = 190, x0 = CW - bw - 12, y0 = 12, sc = Math.min((bw - 40) / (Math.max(...xs) - Math.min(...xs) || 1), (bh - 60) / (Math.max(...ys) - Math.min(...ys) || 1), fitS * CAM.zoom);
+  const cx = (Math.max(...xs) + Math.min(...xs)) / 2, cy = (Math.max(...ys) + Math.min(...ys)) / 2, T = p => [x0 + bw / 2 + (p[0] - cx) * sc, y0 + 34 + (bh - 44) / 2 - (p[1] - cy) * sc];
+  G.save(); G.fillStyle = 'rgba(255,255,255,.95)'; G.strokeStyle = rgba(SEC, .7); G.lineWidth = 1.5; G.setLineDash([]); G.beginPath(); G.roundRect ? G.roundRect(x0, y0, bw, bh, 12) : G.rect(x0, y0, bw, bh); G.fill(); G.stroke();
+  G.font = `700 14px ${getComputedStyle(document.body).fontFamily}`; G.fillStyle = SEC; G.textAlign = 'center'; G.textBaseline = 'middle'; G.fillText('Vera forma della sezione', x0 + bw / 2, y0 + 18);
+  for (const pg of polys) {
+    const Q = pg.map(T); G.beginPath(); Q.forEach((q, i) => i ? G.lineTo(q[0], q[1]) : G.moveTo(q[0], q[1])); G.closePath(); G.fillStyle = rgba(SEC, .12); G.fill();
+    G.save(); G.clip(); G.beginPath(); for (let k = x0 - bh; k < x0 + bw; k += 8) { G.moveTo(k, y0 + bh); G.lineTo(k + bh, y0); } G.lineWidth = 1.2; G.strokeStyle = rgba(SEC, .85); G.stroke(); G.restore();
+    G.beginPath(); Q.forEach((q, i) => i ? G.lineTo(q[0], q[1]) : G.moveTo(q[0], q[1])); G.closePath(); G.lineWidth = 2.2; G.strokeStyle = INK; G.stroke();
+  }
+  G.restore();
+}
 
-/* ---------- pannello delle misure ---------- */
+/* ---------- pannello: solidi del gruppo, misure, sezione ---------- */
 function renderSide() {
-  const K = KINDS[S.kind], d = S.dim[S.kind];
-  const stepper = (key, label, val, min, max, st) => `<div class="fld"><span class="k">${label}${key.startsWith('rot') ? '' : ' (cm)'}</span><div class="step"><button data-k="${key}" data-d="-${st}" aria-label="Meno">−</button><span class="v">${fmt(val)}${key.startsWith('rot') ? '°' : ''}</span><button data-k="${key}" data-d="${st}" aria-label="Più">+</button></div></div>`;
-  const tog = (k, l) => `<button class="tog ${S[k] ? 'on' : ''}" data-t="${k}">${l}</button>`;
-  $('#side').innerHTML = `<div class="ttl">${K.n}</div>
-    ${K.dims.map(([k, l]) => stepper('d.' + k, l, d[k], 0.5, 20, 0.5)).join('')}
+  const sd = S.solids[S.act], K = KINDS[sd.kind], d = dimsOf(sd), sc = S.sec;
+  const stepper = (key, label, val, unit, st) => `<div class="fld"><span class="k">${label}${unit === 'cm' ? ' (cm)' : ''}</span><div class="step"><button data-k="${key}" data-d="-${st}" aria-label="Meno">−</button><span class="v">${fmt(val)}${unit === '°' ? '°' : ''}</span><button data-k="${key}" data-d="${st}" aria-label="Più">+</button></div></div>`;
+  const tog = (k, l, on) => `<button class="tog ${on ?? S[k] ? 'on' : ''}" data-t="${k}">${l}</button>`;
+  const posLbl = { oriz: 'Altezza del piano da PO', front: 'Distanza del piano da PV', lat: 'Distanza del piano da PL', incl: 'Altezza sull’asse' }[sc.type];
+  $('#side').innerHTML = `<div class="ttl">Solidi</div>
+    <div class="grpl">${S.solids.map((x, i) => `<button class="gi ${i === S.act ? 'on' : ''}" data-g="${i}">${i + 1} · ${KINDS[x.kind].n}</button>`).join('')}</div>
+    <div class="row2"><button class="mini" data-a="add">+ Aggiungi</button><button class="mini" data-a="del" ${S.solids.length < 2 ? 'disabled' : ''}>Rimuovi</button></div>
+    <div class="sec-h">${S.act + 1} · ${K.n}</div>
+    ${K.dims.map(([k, l]) => stepper('d.' + k, l, d[k], 'cm', 0.5)).join('')}
+    ${stepper('dPV', 'Distanza da PV', sd.dPV, 'cm', 0.5)}${stepper('dPL', 'Distanza da PL', sd.dPL, 'cm', 0.5)}${stepper('z0', 'Base sopra PO', sd.z0, 'cm', 0.5)}${stepper('rot', 'Rotazione', sd.rot, '°', 15)}
+    <button class="mini" data-a="ontop" ${S.solids.length < 2 ? 'disabled' : ''}>Appoggia sul solido sotto</button>
     <div class="sp"></div>
-    ${stepper('dPV', 'Distanza da PV', S.dPV, 0, 10, 0.5)}${stepper('dPL', 'Distanza da PL', S.dPL, 0, 10, 0.5)}${stepper('rot', 'Rotazione', S.rot, -90, 90, 15)}
+    ${tog('sec', 'Sezione', sc.on)}
+    ${sc.on ? `<div class="row2">${[['oriz', 'Orizzontale'], ['front', 'Frontale'], ['lat', 'Laterale'], ['incl', 'Inclinata']].map(([k, l]) => `<button class="mini ${sc.type === k ? 'on' : ''}" data-st="${k}">${l}</button>`).join('')}</div>
+      ${stepper('sec.pos', posLbl, sc.pos, 'cm', 0.5)}${sc.type === 'incl' ? stepper('sec.ang', 'Inclinazione su PO', sc.ang, '°', 5) : ''}${tog('cut', 'Togli la parte tagliata', sc.cut)}` : ''}
     <div class="sp"></div>
-    ${tog('rays', 'Raggi proiettanti')}${tog('hidden', 'Spigoli nascosti')}${tog('recall', 'Linee di richiamo')}${tog('solid', 'Solido')}${tog('labels', 'Nomi dei piani')}`;
+    ${tog('rays', 'Raggi proiettanti')}${tog('hidden', 'Spigoli nascosti')}${tog('recall', 'Linee di richiamo')}${tog('sheet', 'Foglio da disegno')}${tog('solid', 'Solidi')}${tog('labels', 'Nomi dei piani')}`;
+  document.querySelectorAll('.sol').forEach(b => b.classList.toggle('on', b.dataset.s === sd.kind));
+}
+function changed() { saveS(); rebuild(); fit(); renderSide(); draw(); }
+function topOfOthers(i) { // il solido più alto fra quelli sotto l'impronta del solido i
+  const m = buildSolid(S.solids[i]), xs = m.V.map(p => p[0]), ys = m.V.map(p => p[1]); let top = 0;
+  S.solids.forEach((o, j) => { if (j === i) return; const q = buildSolid(o), qx = q.V.map(p => p[0]), qy = q.V.map(p => p[1]); if (Math.max(...xs) > Math.min(...qx) && Math.min(...xs) < Math.max(...qx) && Math.max(...ys) > Math.min(...qy) && Math.min(...ys) < Math.max(...qy)) top = Math.max(top, q.z1); });
+  return top;
 }
 $('#side').addEventListener('click', e => {
-  const b = e.target.closest('button'); if (!b) return;
-  if (b.dataset.t) { S[b.dataset.t] = !S[b.dataset.t]; saveS(); renderSide(); draw(); return; }
-  const k = b.dataset.k, dv = +b.dataset.d;
-  if (k.startsWith('d.')) { const dk = k.slice(2), d = S.dim[S.kind]; d[dk] = clamp(Math.round((d[dk] + dv) * 10) / 10, 0.5, 20); }
-  else if (k === 'rot') S.rot = clamp(S.rot + dv, -90, 90);
-  else S[k] = clamp(Math.round((S[k] + dv) * 10) / 10, 0, 10);
-  saveS(); M = makeSolid(); fit(); renderSide(); draw();
+  const b = e.target.closest('button'); if (!b || b.disabled) return;
+  const sd = S.solids[S.act];
+  if (b.dataset.g) { S.act = +b.dataset.g; saveS(); renderSide(); draw(); return; }
+  if (b.dataset.st) { S.sec.type = b.dataset.st; const { W, D, H } = scene(); S.sec.pos = { oriz: Math.round(H / 2 * 2) / 2 - 1, front: Math.round((D - 3) / 2 * 2) / 2 + 1, lat: Math.round((W - 3) / 2 * 2) / 2 + 1, incl: Math.round(H / 2 * 2) / 2 - 1 }[b.dataset.st]; changed(); return; }
+  if (b.dataset.a === 'add') { // nuovo solido appoggiato sopra quello scelto, centrato sul suo asse
+    const m = buildSolid(sd), ns = newSolid('cilindro', { dims: { cilindro: { d: 2, h: 3 } } }), r = 1;
+    ns.dPL = Math.max(0, Math.round((-m.axis[0] - r) * 2) / 2); ns.dPV = Math.max(0, Math.round((m.axis[1] - r) * 2) / 2); ns.z0 = m.z1;
+    S.solids.push(ns); S.act = S.solids.length - 1; changed(); return;
+  }
+  if (b.dataset.a === 'del') { S.solids.splice(S.act, 1); S.act = Math.max(0, S.act - 1); changed(); return; }
+  if (b.dataset.a === 'ontop') { sd.z0 = topOfOthers(S.act); changed(); return; }
+  if (b.dataset.t) { if (b.dataset.t === 'sec') S.sec.on = !S.sec.on; else if (b.dataset.t === 'cut') S.sec.cut = !S.sec.cut; else S[b.dataset.t] = !S[b.dataset.t]; changed(); return; }
+  const k = b.dataset.k, dv = +b.dataset.d; if (!k) return;
+  if (k.startsWith('d.')) { const dk = k.slice(2), d = dimsOf(sd); d[dk] = clamp(Math.round((d[dk] + dv) * 10) / 10, 0.5, 20); }
+  else if (k === 'rot') sd.rot = clamp(sd.rot + dv, -90, 90);
+  else if (k === 'sec.pos') S.sec.pos = clamp(Math.round((S.sec.pos + dv) * 10) / 10, 0, 40);
+  else if (k === 'sec.ang') S.sec.ang = clamp(S.sec.ang + dv, 5, 85);
+  else sd[k] = clamp(Math.round((sd[k] + dv) * 10) / 10, 0, 20);
+  changed();
 });
-function pickSolid(k) { S.kind = k; document.querySelectorAll('.sol').forEach(b => b.classList.toggle('on', b.dataset.s === k)); saveS(); M = makeSolid(); fit(); renderSide(); draw(); }
-document.querySelectorAll('.sol').forEach(b => b.onclick = () => pickSolid(b.dataset.s));
+// cambiando tipo, il solido resta centrato dov'era (così un solido appoggiato sopra un altro rimane sul suo asse)
+const centerOf = sd => { const m = buildSolid(sd), xs = m.V.map(p => p[0]), ys = m.V.map(p => p[1]); return [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2]; };
+document.querySelectorAll('.sol').forEach(b => b.onclick = () => {
+  const sd = S.solids[S.act], c0 = centerOf(sd); sd.kind = b.dataset.s; const c1 = centerOf(sd);
+  sd.dPL = Math.max(0, Math.round((sd.dPL - (c0[0] - c1[0])) * 100) / 100); sd.dPV = Math.max(0, Math.round((sd.dPV + (c0[1] - c1[1])) * 100) / 100);
+  changed();
+});
 
 /* ---------- apertura dei piani ---------- */
 const openR = $('#open');
 function setOpen(v) { S.open = clamp(v, 0, 90); openR.value = Math.round(S.open); $('#openV').textContent = Math.round(S.open) + '°'; $('#playLbl').textContent = S.open >= 89.5 ? 'Chiudi i piani' : 'Apri i piani'; draw(); }
 openR.addEventListener('input', () => { anim = null; setOpen(+openR.value); });
-$('#playBtn').onclick = () => { const to = S.open >= 89.5 ? 0 : 90; animate({ open: to }); };
+$('#playBtn').onclick = () => animate({ open: S.open >= 89.5 ? 0 : 90 });
 function animate(target, ms) {
-  const from = { open: S.open, yaw: CAM.yaw, pitch: CAM.pitch }, t0 = performance.now(), dur = ms || 1800, me = {}; anim = me;
+  const from = { open: S.open, yaw: CAM.yaw, pitch: CAM.pitch }, t0 = performance.now(), dur = ms || 2200, me = {}; anim = me;
   const step = now => { if (anim !== me) return; const k = clamp((now - t0) / dur, 0, 1), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
     if ('open' in target) setOpen(from.open + (target.open - from.open) * e);
     if ('yaw' in target) { CAM.yaw = from.yaw + (target.yaw - from.yaw) * e; CAM.pitch = from.pitch + (target.pitch - from.pitch) * e; B = basis(); draw(); }
@@ -362,8 +546,8 @@ $('#view3d').onclick = () => { CAM.zoom = 1; CAM.px = CAM.py = 0; animate({ yaw:
 
 /* ---------- gesti: un dito gira il triedro, due dita ingrandiscono e spostano ---------- */
 const pts = new Map(); let g0 = null;
-cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); g0 = snap(); anim = null; $('#hint').hidden = true; });
 function snap() { const P = [...pts.values()]; return { P: P.map(p => ({ ...p })), yaw: CAM.yaw, pitch: CAM.pitch, zoom: CAM.zoom, px: CAM.px, py: CAM.py }; }
+cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); g0 = snap(); anim = null; $('#hint').hidden = true; });
 cv.addEventListener('pointermove', e => {
   if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
   const P = [...pts.values()];
@@ -382,9 +566,9 @@ cv.addEventListener('dblclick', () => { CAM.zoom = 1; CAM.px = CAM.py = 0; draw(
 
 $('#fsBtn').onclick = () => { const el = document.documentElement; try { document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen(); } catch (_) { } };
 new ResizeObserver(layout).observe(stage);
-pickSolid(S.kind); setOpen(0); layout();
+rebuild(); renderSide(); setOpen(0); layout();
 setTimeout(() => { $('#hint').style.opacity = 0; setTimeout(() => $('#hint').hidden = true, 700); }, 7000);
-window.PR = { S, get M() { return M; }, CAM, setOpen, pickSolid, viewEdges, VIEWS, makeSolid };
+window.PR = { S, CAM, setOpen, changed, get CUT() { return CUT; }, get MESH() { return MESH; }, edgesSeen, VIEWS, seen: n => seen(n) };
 })();
 </script>
 </body></html>
