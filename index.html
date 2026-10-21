@@ -690,9 +690,11 @@ function paintStroke(s) {
     }
     return;
   }
-  if (s.type === 'dot') { // punto: pallino pieno o crocetta
-    if (s.style === 'cross') { penStyle('HB', false); const k = 0.12; G.beginPath(); G.moveTo(s.x - k, s.y - k); G.lineTo(s.x + k, s.y + k); G.moveTo(s.x - k, s.y + k); G.lineTo(s.x + k, s.y - k); G.stroke(); return; }
-    G.fillStyle = PENS.HB.col; G.beginPath(); G.arc(s.x, s.y, Math.max(0.04, (U.lim && !U.exporting ? 4 : 1.6) / V.s), 0, TAU); G.fill(); return;
+  if (s.type === 'dot') { // punto: pallino pieno o crocetta, grande quanto basta per vedersi sopra un tratto della stessa matita
+    const P = PENS[s.pen] || PENS.HB, lim = U.lim && !U.exporting;
+    const lw = Math.max(P.w, P.min / V.s, lim ? (s.pen === '2H' ? 2.6 : 4.4) / V.s : 0), col = lim ? (s.pen === '2H' ? '#56636f' : '#0b0e10') : P.col;
+    if (s.style === 'cross') { penStyle(s.pen, false); const k = Math.max(s.pen === '2H' ? 0.1 : 0.14, lw * 3); G.beginPath(); G.moveTo(s.x - k, s.y - k); G.lineTo(s.x + k, s.y + k); G.moveTo(s.x - k, s.y + k); G.lineTo(s.x + k, s.y - k); G.stroke(); return; }
+    G.fillStyle = col; G.beginPath(); G.arc(s.x, s.y, lw * 1.4, 0, TAU); G.fill(); return;
   }
   if (s.type === 'mark') { // centro di una circonferenza: crocetta
     penStyle(s.pen, false); G.beginPath(); G.moveTo(s.x - s.size, s.y); G.lineTo(s.x + s.size, s.y); G.moveTo(s.x, s.y - s.size); G.lineTo(s.x, s.y + s.size); G.stroke(); return;
@@ -1462,7 +1464,7 @@ function paintSelStrokes() {
 function placePoint(p) {
   const q = placeSnap(p) || p, at = { x: r3(q.x), y: r3(q.y) };
   if (D.strokes.some(s => s.type === 'dot' && Math.hypot(s.x - at.x, s.y - at.y) < 0.02)) { toast('Qui c\'è già un punto'); return; }
-  pushUndo(); addStroke({ type: 'dot', x: at.x, y: at.y, style: U.dotStyle, pen: 'HB', dash: false });
+  pushUndo(); addStroke({ type: 'dot', x: at.x, y: at.y, style: U.dotStyle, pen: U.pen, dash: false }); // il punto segue la matita scelta (2H o HB)
   if (U.dotLetter) { addStroke({ type: 'text', text: U.nextLetter, x: r3(at.x + 0.2), y: r3(at.y - 0.2), size: TXT_EM, bold: false, pen: 'HB', dash: false }); U.nextLetter = nextLetterOf(U.nextLetter); }
   changed();
 }
@@ -1772,7 +1774,7 @@ function renderCtx() {
       ${fl ? `<div class="lbl">Bordi</div><button class="chip ${U.col.all ? 'on' : ''}" data-a="cwalls">${U.col.all ? 'Tutte le linee' : 'Solo contorni HB'}</button>`
            : `<div class="lbl">Tratto</div><div class="seg">${[[0.3, 'Sottile'], [0.6, 'Medio'], [1.2, 'Largo']].map(([v, n]) => `<button class="btn ${U.col.bw === v ? 'on' : ''}" data-a="cbw" data-v="${v}">${n}</button>`).join('')}</div>`}`;
   } else if (U.mode === 'punto') {
-    h = `<div class="ttl">Punto</div><span class="hint">Tocca dove vuoi il punto: si aggancia a incroci, linee e quadretti.</span>
+    h = `<div class="ttl">Punto</div><span class="hint">Tocca dove vuoi il punto: si aggancia a incroci, linee e quadretti. Segue la matita scelta in alto (2H o HB).</span>
       <div class="lbl">Segno</div><div class="g2"><button class="chip ${U.dotStyle === 'dot' ? 'on' : ''}" data-a="dotstyle" data-v="dot">● Punto</button><button class="chip ${U.dotStyle === 'cross' ? 'on' : ''}" data-a="dotstyle" data-v="cross">✕ Croce</button></div>
       <div class="lbl">Lettera</div><button class="chip ${U.dotLetter ? 'on' : ''}" data-a="dotletter">${U.dotLetter ? 'Sì · prossima ' + esc(U.nextLetter) : 'Nessuna'}</button>${snapControls()}`;
   } else if (U.mode === 'lettere') {
