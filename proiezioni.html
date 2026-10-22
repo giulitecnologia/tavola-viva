@@ -317,10 +317,15 @@ function rebuild() {
 }
 let VCACHE = {};
 function seen(name) { return VCACHE[name] || (VCACHE[name] = edgesSeen(CUT, VIEWS[name].t)); }
-function scene() { // ingombro dei piani: tiene conto di tutti i solidi interi
+// piani di misura fissa, come un foglio vero: cambiando le misure dei solidi non si muovono;
+// si allargano (di centimetri interi) solo se un solido non ci sta più, e non tornano mai più piccoli
+const PLANES = { W: 16, D: 9, H: 12 };
+function scene() {
   const xs = MESH.flatMap(m => m.V.map(p => p[0])), ys = MESH.flatMap(m => m.V.map(p => p[1])), zs = MESH.flatMap(m => m.V.map(p => p[2]));
-  return { W: Math.max(10, -Math.min(...xs) + 3), D: Math.max(7, Math.max(...ys) + 3), H: Math.max(7, Math.max(...zs) + 3) };
+  PLANES.W = Math.max(PLANES.W, Math.ceil(-Math.min(...xs) + 2)); PLANES.D = Math.max(PLANES.D, Math.ceil(Math.max(...ys) + 2)); PLANES.H = Math.max(PLANES.H, Math.ceil(Math.max(...zs) + 2));
+  return { W: PLANES.W, D: PLANES.D, H: PLANES.H };
 }
+let lastSize = '';
 
 /* ---------- camera (assonometria ortogonale) ---------- */
 const cv = $('#cv'), stage = $('#stage'), G = cv.getContext('2d');
@@ -493,7 +498,7 @@ function renderSide() {
     ${tog('rays', 'Raggi proiettanti')}${tog('hidden', 'Spigoli nascosti')}${tog('recall', 'Linee di richiamo')}${tog('sheet', 'Foglio da disegno')}${tog('solid', 'Solidi')}${tog('labels', 'Nomi dei piani')}`;
   document.querySelectorAll('.sol').forEach(b => b.classList.toggle('on', b.dataset.s === sd.kind));
 }
-function changed() { saveS(); rebuild(); fit(); renderSide(); draw(); }
+function changed() { saveS(); rebuild(); const sz = JSON.stringify(scene()); if (sz !== lastSize) { lastSize = sz; fit(); } renderSide(); draw(); } // la vista si riadatta solo se i piani cambiano davvero
 function topOfOthers(i) { // il solido più alto fra quelli sotto l'impronta del solido i
   const m = buildSolid(S.solids[i]), xs = m.V.map(p => p[0]), ys = m.V.map(p => p[1]); let top = 0;
   S.solids.forEach((o, j) => { if (j === i) return; const q = buildSolid(o), qx = q.V.map(p => p[0]), qy = q.V.map(p => p[1]); if (Math.max(...xs) > Math.min(...qx) && Math.min(...xs) < Math.max(...qx) && Math.max(...ys) > Math.min(...qy) && Math.min(...ys) < Math.max(...qy)) top = Math.max(top, q.z1); });
@@ -566,7 +571,7 @@ cv.addEventListener('dblclick', () => { CAM.zoom = 1; CAM.px = CAM.py = 0; draw(
 
 $('#fsBtn').onclick = () => { const el = document.documentElement; try { document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen(); } catch (_) { } };
 new ResizeObserver(layout).observe(stage);
-rebuild(); renderSide(); setOpen(0); layout();
+rebuild(); lastSize = JSON.stringify(scene()); renderSide(); setOpen(0); layout();
 setTimeout(() => { $('#hint').style.opacity = 0; setTimeout(() => $('#hint').hidden = true, 700); }, 7000);
 window.PR = { S, CAM, setOpen, changed, get CUT() { return CUT; }, get MESH() { return MESH; }, edgesSeen, VIEWS, seen: n => seen(n) };
 })();
