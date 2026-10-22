@@ -1986,8 +1986,10 @@ const GUIDA = [
   ['Salvare, aprire e scaricare', [
     '<b>Salva</b> in alto (o Ctrl+S): la prima volta chiede il nome, poi aggiorna la stessa tavola.',
     '<b>Tavole</b>: elenco delle tavole salvate da aprire; <b>Nuovo foglio</b> mette da parte il lavoro attuale nell’elenco.',
-    'Le tavole restano <b>nel browser di questo computer</b>: chi usa l’app su un altro computer non le vede. Sul computer della LIM condiviso, chi usa lo stesso browser vede le tavole salvate lì.',
-    '<b>Scarica file della tavola</b> per conservarla o portarla altrove (si riapre con Apri file…). <b>PDF</b> e <b>PNG</b> della tavola e dei passaggi, in scala reale.',
+    'L’elenco <b>Tavole</b> resta solo <b>in questo browser, in questo profilo di Chrome e su questo computer</b>: cambiando account (per esempio da quello personale a quello della scuola) o computer non si vede. Per averle ovunque, usa Salva come file o Scarica tutte le tavole.',
+    '<b>Salva come file…</b>: scegli tu dove metterla, per esempio nella cartella di Google Drive. Da lì in poi <b>Salva</b> aggiorna anche quel file, e da qualunque computer la riapri con <b>Apri file…</b> (dove il browser non lo permette, il file si scarica in Download).',
+    '<b>Scarica tutte le tavole</b>: un unico file con tutte le tavole e gli esempi. Aprendolo con Apri file… in un altro profilo o computer, le ritrovi tutte nell’elenco.',
+    '<b>PDF</b> e <b>PNG</b> della tavola e dei passaggi, in scala reale.',
     'In Tavole trovi anche alcune <b>costruzioni preparate</b> da mostrare passo passo.']],
 ];
 function guideHTML() {
@@ -2028,15 +2030,17 @@ function boardsHTML() {
   const ex = kvGet(LS.esempi) || {}, myEx = Object.keys(ex).sort((a, b) => a.localeCompare(b, 'it'));
   const boards = kvGet(LS.boards) || {}, names = Object.keys(boards).sort((a, b) => (boards[b].savedAt || 0) - (boards[a].savedAt || 0));
   return `<div class="row"><span class="k">Tavola aperta</span><div class="wrap"><button class="btn" data-a="rename" style="flex:1;justify-content:flex-start;min-width:0;overflow:hidden">${esc(D.name)}</button><button class="btn primary" data-a="savelocal">Salva</button></div><div class="wrap"><button class="btn" data-a="new">Nuovo foglio bianco</button></div></div>
-  <div class="row"><span class="k">Salvate su questo dispositivo</span><div class="list">${names.length ? names.map(n => `<div class="item"><span class="nm">${esc(n)}<br><span class="dt">${new Date(boards[n].savedAt || 0).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })} · ${(boards[n].doc.steps || []).length} passaggi</span></span><button class="btn" data-a="openlocal" data-v="${esc(n)}">Apri</button><button class="btn ghost" data-a="dellocal" data-v="${esc(n)}">Elimina</button></div>`).join('') : '<div class="empty">Nessuna tavola salvata.</div>'}</div></div>
-  <div class="row"><span class="k">File da trasferire</span><div class="wrap"><button class="btn" data-a="download">Scarica file della tavola</button><button class="btn" data-a="openfile">Apri file…</button></div>
-    <div class="empty">Il file (.json) contiene disegno, strumenti, impostazioni e passaggi.</div></div>
+  <div class="row"><span class="k">Salvate in questo browser</span><div class="list">${names.length ? names.map(n => `<div class="item"><span class="nm">${esc(n)}<br><span class="dt">${new Date(boards[n].savedAt || 0).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })} · ${(boards[n].doc.steps || []).length} passaggi</span></span><button class="btn" data-a="openlocal" data-v="${esc(n)}">Apri</button><button class="btn ghost" data-a="dellocal" data-v="${esc(n)}">Elimina</button></div>`).join('') : '<div class="empty">Nessuna tavola salvata.</div>'}</div></div>
+  <div class="row"><span class="k">Sul computer o su Drive (consigliato)</span><div class="wrap"><button class="btn primary" data-a="saveasfile">${FS_OK ? 'Salva come file…' : 'Scarica file della tavola'}</button><button class="btn" data-a="openfile">Apri file…</button></div>
+    ${FILEH ? `<div class="empty">Collegata al file <b>${esc(FILEH.name)}</b>: ogni volta che premi <b>Salva</b> si aggiorna anche il file.</div>` : `<div class="empty">${FS_OK ? 'Scegli tu dove metterla, per esempio nella cartella di Google Drive o in Documenti: da lì in poi <b>Salva</b> aggiorna anche quel file.' : 'Il file finisce nella cartella Download: mettilo su Drive o in una chiavetta.'} La riapri da qualunque computer con <b>Apri file…</b></div>`}
+    <div class="wrap"><button class="btn" data-a="downloadall">Scarica tutte le tavole</button></div>
+    <div class="empty">Un unico file con tutte le tavole e gli esempi di questo browser: con <b>Apri file…</b> le ritrovi tutte in un altro computer o in un altro profilo.</div></div>
   <div class="row"><span class="k">Scarica PDF o immagine</span><div class="wrap"><button class="btn primary" data-a="pdf">Tavola in PDF</button><button class="btn primary" data-a="pdfsteps">Passaggi in PDF</button></div><div class="wrap"><button class="btn" data-a="png">Tavola in PNG</button><button class="btn" data-a="pngsteps">Passaggi in PNG</button></div><div class="empty">La tavola: bordo del foglio, squadratura, cartigli e segni. Il PDF è in scala reale (1 cm = 1 cm). I passaggi in PDF: una pagina per passaggio, con gli strumenti nella loro posizione; in PNG: tutte le fasi in un'unica immagine.</div></div>
   <div class="row"><span class="k">Costruzioni preparate</span><div class="wrap"><button class="btn" data-a="sample" data-v="asse">Asse di un segmento</button><button class="btn" data-a="sample" data-v="triangolo">Triangolo equilatero inscritto</button><button class="btn" data-a="sample" data-v="esagono">Esagono regolare</button><button class="btn" data-a="sample" data-v="parallele">Parallele con due squadre</button></div>
     ${myEx.length ? `<span class="k" style="margin-top:6px">I tuoi esempi</span><div class="list">${myEx.map(n => `<div class="item"><span class="nm">${esc(n)}<br><span class="dt">${(ex[n].steps || []).length} passaggi</span></span><button class="btn" data-a="myex" data-v="${esc(n)}">Apri</button><button class="btn ghost" data-a="delex" data-v="${esc(n)}">Elimina</button></div>`).join('')}</div>` : ''}
     <div class="wrap"><button class="btn" data-a="saveex">Salva questa tavola come esempio</button></div>
     <div class="empty">Si aprono con i passaggi già registrati. Il tuo foglio resta da parte: per ritrovarlo premi “Chiudi esempio” in alto.</div></div>
-  <div class="note warn"><b>Dati locali.</b> Il salvataggio automatico e le tavole salvate restano solo in questo browser, su questo computer (c'è spazio per moltissime tavole). Non sono sincronizzati e si perdono se si cancellano i dati del browser. Per conservarle davvero, scarica il file della tavola.</div>
+  <div class="note warn"><b>Dove restano le tavole.</b> L'elenco qui sopra è solo in questo browser, in questo profilo e su questo computer: cambiando account di Chrome o computer non si vede. Ognuno vede solo le sue tavole. Per ritrovarle ovunque, salvale come file (meglio nella cartella di Drive) oppure scarica tutte le tavole.</div>
 `;
 }
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
@@ -2058,10 +2062,11 @@ $('#drawerBody').addEventListener('click', e => {
     case 'saveprefs': { const p = clone(s); toast(lsSet(LS.prefs, p) ? 'Impostazioni salvate come predefinite' : 'Impossibile salvare nel browser', lsSet(LS.prefs, p) ? '' : 'warn'); break; }
     case 'rename': openText({ title: 'Nome della tavola', value: D.name === 'Tavola senza nome' ? '' : D.name, onOk: x => { if (x.trim()) { D.name = x.trim(); changed(); renderDrawer(); } } }); break;
     case 'savelocal': saveBoard(); renderDrawer(); break;
-    case 'openlocal': { const bd = kvGet(LS.boards) || {}; if (bd[v]) { leaveExample(); loadDoc(bd[v].doc); D.example = false; changed(); closeDrawer(); toast('Aperta “' + v + '”'); } break; }
+    case 'openlocal': { const bd = kvGet(LS.boards) || {}; if (bd[v]) { leaveExample(); FILEH = null; loadDoc(bd[v].doc); D.example = false; changed(); closeDrawer(); toast('Aperta “' + v + '”'); } break; }
     case 'dellocal': confirmBox('Eliminare “' + v + '” da questo dispositivo?', 'Elimina', () => { const bd = kvGet(LS.boards) || {}; delete bd[v]; kvSet(LS.boards, bd); renderDrawer(); }); break;
-    case 'download': downloadBlob(new Blob([JSON.stringify(D, null, 1)], { type: 'application/json' }), safeName(D.name) + '.json'); break;
-    case 'openfile': $('#fileIn').click(); break;
+    case 'saveasfile': saveAsFile(); break;
+    case 'downloadall': downloadAll(); break;
+    case 'openfile': openFile(); break;
     case 'pdf': exportPDF(); break;
     case 'pdfsteps': exportStepsPDF(); break;
     case 'png': exportPNG(); break;
@@ -2081,8 +2086,51 @@ function saveBoard() {
   const bd = kvGet(LS.boards) || {}, same = JSON.stringify(D.strokes);
   for (const k in bd) if (k !== D.name && k.includes(' · ') && JSON.stringify(bd[k].doc.strokes) === same) delete bd[k]; // copie automatiche identiche
   const c = clone(D); delete c.example; delete c.exEdited; bd[D.name] = { savedAt: Date.now(), doc: c };
-  if (kvSet(LS.boards, bd)) { if (D.example) D.example = false; renderTop(); toast('Tavola “' + D.name + '” salvata'); }
-  else toast('Salvataggio non riuscito in questo browser: scarica il file della tavola.', 'warn');
+  const ok = kvSet(LS.boards, bd); if (ok) { if (D.example) D.example = false; renderTop(); }
+  if (FILEH) { const h = FILEH; writeFile(h).then(() => toast('Tavola “' + D.name + '” salvata, anche nel file ' + h.name)).catch(() => toast('Salvata nel browser, ma il file ' + h.name + ' non si è aggiornato: usa “Salva come file…”.', 'warn')); }
+  else if (ok) toast('Tavola “' + D.name + '” salvata');
+  if (!ok) toast('Salvataggio non riuscito in questo browser: salvala come file.', 'warn');
+}
+/* ---------- tavole come file: sul computer o nella cartella di Drive ---------- */
+let FILEH = null, FILEH_PREV = null; // il file collegato alla tavola aperta: Salva lo aggiorna (nei browser che lo permettono)
+const FS_OK = 'showSaveFilePicker' in window, JSON_TYPES = [{ description: 'Tavola viva', accept: { 'application/json': ['.json'] } }];
+const docJSON = () => { const c = clone(D); delete c.example; delete c.exEdited; return JSON.stringify(c, null, 1); };
+async function writeFile(h) {
+  if (h.queryPermission && await h.queryPermission({ mode: 'readwrite' }) !== 'granted' && await h.requestPermission({ mode: 'readwrite' }) !== 'granted') throw new Error('permesso');
+  const w = await h.createWritable(); await w.write(docJSON()); await w.close();
+}
+const downloadDoc = () => downloadBlob(new Blob([docJSON()], { type: 'application/json' }), safeName(D.name) + '.json');
+async function saveAsFile() {
+  if (!FS_OK) return downloadDoc();
+  let h; try { h = await showSaveFilePicker({ suggestedName: safeName(D.name) + '.json', types: JSON_TYPES }); } catch (e) { if (e && e.name === 'AbortError') return; return downloadDoc(); }
+  if (D.name === 'Tavola senza nome') { D.name = h.name.replace(/\.json$/i, ''); changed(); }
+  try { await writeFile(h); } catch (_) { toast('Non sono riuscita a scrivere il file: scaricalo.', 'warn'); return downloadDoc(); }
+  FILEH = h; if (D.example) D.example = false; renderTop(); if (drawerKind) renderDrawer();
+  toast('Salvata nel file ' + h.name + '. D’ora in poi Salva aggiorna anche questo file.');
+}
+async function openFile() {
+  if (!('showOpenFilePicker' in window)) return $('#fileIn').click();
+  let h; try { [h] = await showOpenFilePicker({ types: JSON_TYPES }); } catch (e) { if (e && e.name === 'AbortError') return; return $('#fileIn').click(); }
+  openText_(await (await h.getFile()).text(), h);
+}
+function openText_(txt, h) {
+  let o; try { o = JSON.parse(txt); } catch (_) { o = null; }
+  if (o && o.app === 'tavolaviva-archivio') return importAll(o);
+  if (!o || o.app !== 'tavolaviva' || !Array.isArray(o.strokes)) { toast('Questo file non è una tavola di Tavola viva.', 'warn'); return; }
+  leaveExample(); FILEH_PREV = null; loadDoc(o); D.example = false; FILEH = h || null; changed(); closeDrawer(); toast(h ? 'Tavola aperta dal file: Salva aggiornerà ' + h.name : 'Tavola aperta dal file');
+}
+function downloadAll() {
+  const bd = kvGet(LS.boards) || {}, ex = kvGet(LS.esempi) || {}, n = Object.keys(bd).length + Object.keys(ex).length;
+  if (!n) { toast('In questo browser non ci sono tavole salvate.', 'warn'); return; }
+  downloadBlob(new Blob([JSON.stringify({ app: 'tavolaviva-archivio', savedAt: Date.now(), boards: bd, esempi: ex })], { type: 'application/json' }), 'tavole-tavola-viva-' + new Date().toISOString().slice(0, 10) + '.json');
+}
+function importAll(o) { // aggiunge all'elenco le tavole dell'archivio, senza toccare quelle che ci sono già
+  const bd = kvGet(LS.boards) || {}, ex = kvGet(LS.esempi) || {}; let n = 0;
+  const add = (to, k, v, doc) => { if (!doc || !Array.isArray(doc.strokes)) return; const same = Object.values(to).some(w => JSON.stringify(w.doc || w) === JSON.stringify(doc)); if (same) return; let nm = k, i = 2; while (to[nm]) nm = k + ' (' + i++ + ')'; to[nm] = v; n++; };
+  for (const [k, v] of Object.entries(o.boards || {})) add(bd, k, v, v && v.doc);
+  for (const [k, v] of Object.entries(o.esempi || {})) add(ex, k, v, v);
+  if (!kvSet(LS.boards, bd) || !kvSet(LS.esempi, ex)) { toast('Spazio del browser esaurito.', 'warn'); return; }
+  if (drawerKind) renderDrawer(); toast(n ? (n === 1 ? 'Aggiunta 1 tavola all’elenco' : 'Aggiunte ' + n + ' tavole all’elenco') : 'Le tavole di questo file erano già tutte nell’elenco');
 }
 function afterSheet() {
   layout(); changed(); if (drawerKind) renderDrawer();
@@ -2090,7 +2138,7 @@ function afterSheet() {
 }
 $('#fileIn').addEventListener('change', e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
-  const r = new FileReader(); r.onload = () => { try { const o = JSON.parse(r.result); if (o.app !== 'tavolaviva' || !Array.isArray(o.strokes)) throw 0; leaveExample(); loadDoc(o); D.example = false; changed(); closeDrawer(); toast('Tavola aperta dal file'); } catch (_) { toast('Questo file non è una tavola di Tavola viva.', 'warn'); } };
+  const r = new FileReader(); r.onload = () => openText_(r.result, null);
   r.readAsText(f);
 });
 const safeName = s => (s || 'tavola').replace(/[^\w\-àèéìòù ]+/gi, '').trim().replace(/\s+/g, '-') || 'tavola';
@@ -2175,8 +2223,8 @@ function exportPNG() {
 let prevDoc = null;
 function openExample(kind) { openExampleDoc(sampleDoc(kind)); }
 function openExampleDoc(doc) {
-  if (!D.example) { prevDoc = clone(D); kvSet(LS.prev, prevDoc); }
-  loadDoc(doc); D.example = true; D.exEdited = false; changed();
+  if (!D.example) { prevDoc = clone(D); kvSet(LS.prev, prevDoc); FILEH_PREV = FILEH; }
+  FILEH = null; loadDoc(doc); D.example = true; D.exEdited = false; changed();
   toast('Esempio aperto. “Passaggi” lo mostra fase per fase; “Chiudi esempio” ti riporta al tuo foglio.');
 }
 function leaveExample() { prevDoc = null; kvSet(LS.prev, null); }
@@ -2191,7 +2239,7 @@ function archive(doc, label) { // mette un foglio al sicuro nell'elenco Tavole, 
 function freshDoc(from) { const d = newDoc(); if (from && from.header) { d.header.nome = from.header.nome || ''; d.header.classe = from.header.classe || ''; } return d; }
 function backToSheet() {
   if (D.exEdited) archive(D, D.name + ' (modificato)');
-  const p = prevDoc || kvGet(LS.prev); leaveExample(); loadDoc(p && p.app === 'tavolaviva' ? p : freshDoc()); D.example = false; changed();
+  const p = prevDoc || kvGet(LS.prev); leaveExample(); loadDoc(p && p.app === 'tavolaviva' ? p : freshDoc()); D.example = false; FILEH = FILEH_PREV; FILEH_PREV = null; changed();
   toast(D.strokes.length ? 'Sei tornata al tuo foglio' : 'Foglio bianco pronto');
 }
 function newSheet() {
@@ -2200,7 +2248,7 @@ function newSheet() {
   if (D.example) { if (D.exEdited) archive(D, D.name + ' (modificato)'); const p = prevDoc || kvGet(LS.prev); if (p) saved = archive(p); leaveExample(); }
   else saved = archive(D);
   const hd = D.example ? (prevDoc || kvGet(LS.prev) || D) : D;
-  loadDoc(freshDoc(hd)); D.example = false; changed();
+  FILEH = FILEH_PREV = null; loadDoc(freshDoc(hd)); D.example = false; changed();
   toast(saved ? 'Foglio bianco pronto. Il disegno di prima è in Tavole.' : 'Foglio bianco pronto');
 }
 $('#exBack').onclick = () => { if (!gst) backToSheet(); };
