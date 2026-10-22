@@ -62,6 +62,10 @@ button{font:inherit;color:inherit}
 .mini.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .mini[disabled]{opacity:.4;cursor:default}
 .sec-h{font-weight:700;font-size:14px;color:var(--accent);margin-top:2px}
+.addbox{display:flex;flex-direction:column;gap:6px;padding:6px;min-width:0;border:2px solid var(--accent);border-radius:12px;background:#fff}
+.addgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}
+.addgrid button{display:flex;flex-direction:column;align-items:center;gap:2px;min-height:62px;min-width:0;padding:4px 2px;overflow-wrap:anywhere;hyphens:auto;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:12px;font-weight:600;line-height:1.1;cursor:pointer;touch-action:manipulation}
+.addgrid svg{width:28px;height:28px}
 
 /* barra in basso: apertura dei piani */
 #bottom{grid-row:3;grid-column:2;display:flex;align-items:center;gap:12px;padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));background:var(--chrome);border-top:1px solid var(--line);flex-wrap:wrap}
@@ -490,6 +494,17 @@ function renderSide() {
   const stepper = (key, label, val, unit, st) => `<div class="fld"><span class="k">${label}${unit === 'cm' ? ' (cm)' : ''}</span><div class="step"><button data-k="${key}" data-d="-${st}" aria-label="Meno">−</button><span class="v">${fmt(val)}${unit === '°' ? '°' : ''}</span><button data-k="${key}" data-d="${st}" aria-label="Più">+</button></div></div>`;
   const tog = (k, l, on) => `<button class="tog ${on ?? S[k] ? 'on' : ''}" data-t="${k}">${l}</button>`;
   const posLbl = { oriz: 'Altezza del piano da PO', front: 'Distanza del piano da PV', lat: 'Distanza del piano da PL', incl: 'Altezza sull’asse' }[sc.type];
+  if (ADDING) { // scelta del solido da aggiungere: quale e dove
+    const icons = Object.fromEntries([...document.querySelectorAll('.sol')].map(b => [b.dataset.s, b.querySelector('svg').outerHTML]));
+    $('#side').innerHTML = `<div class="ttl">Aggiungi un solido</div><div class="addbox">
+      <span class="k" style="font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700">Dove</span>
+      <div class="row2"><button class="mini ${ADDING.where === 'sopra' ? 'on' : ''}" data-w="sopra">Sopra</button><button class="mini ${ADDING.where === 'accanto' ? 'on' : ''}" data-w="accanto">Accanto</button></div>
+      <span class="hint" style="font-size:12.5px;color:var(--muted)">${ADDING.where === 'sopra' ? 'Appoggiato sul solido ' + (S.act + 1) + ' e centrato sul suo asse.' : 'Sul PO, a sinistra del solido ' + (S.act + 1) + ', a contatto.'}</span>
+      <span class="k" style="font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700">Quale solido?</span>
+      <div class="addgrid">${Object.keys(KINDS).map(k => `<button data-pick="${k}">${icons[k] || ''}${KINDS[k].n.replace('Parallelepipedo', 'Parallele&shy;pipedo')}</button>`).join('')}</div>
+      <button class="mini" data-a="addno">Annulla</button></div>`;
+    return;
+  }
   $('#side').innerHTML = `<div class="ttl">Solidi</div>
     <div class="grpl">${S.solids.map((x, i) => `<button class="gi ${i === S.act ? 'on' : ''}" data-g="${i}">${i + 1} · ${KINDS[x.kind].n}</button>`).join('')}</div>
     <div class="row2"><button class="mini" data-a="add">+ Aggiungi</button><button class="mini" data-a="del" ${S.solids.length < 2 ? 'disabled' : ''}>Rimuovi</button></div>
@@ -505,6 +520,27 @@ function renderSide() {
     ${tog('rays', 'Raggi proiettanti')}${tog('hidden', 'Spigoli nascosti')}${tog('recall', 'Linee di richiamo')}${tog('sheet', 'Foglio da disegno')}${tog('solid', 'Solidi')}${tog('labels', 'Nomi dei piani')}`;
   document.querySelectorAll('.sol').forEach(b => b.classList.toggle('on', b.dataset.s === sd.kind));
 }
+let ADDING = null;
+// nuovo solido: sopra quello selezionato (centrato, con la base che non sborda) oppure accanto, sul PO
+function addSolid(kind, where) {
+  const below = S.solids[S.act], m = buildSolid(below), xs = m.V.map(p => p[0]), ys = m.V.map(p => p[1]);
+  const fw = Math.max(...xs) - Math.min(...xs), fd = Math.max(...ys) - Math.min(...ys), d = defDims(kind);
+  if (where === 'sopra') { // la base del nuovo solido sta dentro la faccia superiore di quello sotto
+    const top = below.kind === 'piramide' || below.kind === 'cono' ? 0.4 : 1; // sopra una punta, un solido piccolo
+    const lim = Math.max(0.5, Math.floor(Math.min(fw, fd) * top * 0.8 * 2) / 2);
+    if (kind === 'parallelepipedo') { d.a = Math.min(d.a, Math.max(0.5, Math.floor(fw * 0.8 * 2) / 2)); d.b = Math.min(d.b, Math.max(0.5, Math.floor(fd * 0.8 * 2) / 2)); }
+    else if (kind === 'prisma6') d.l = Math.min(d.l, Math.max(0.5, Math.floor(lim / 2 * 2) / 2));
+    else if ('l' in d) d.l = Math.min(d.l, lim); else d.d = Math.min(d.d, lim);
+    d.h = d.h ? Math.min(d.h, 4) : d.h;
+  }
+  const ns = newSolid(kind, { dims: { [kind]: d } });
+  if (where === 'sopra') { // esattamente centrato sull'asse del solido sotto
+    ns.z0 = m.z1; ns.dPL = 0; ns.dPV = 0; const c = buildSolid(ns), cx = c.V.map(p => p[0]), cy = c.V.map(p => p[1]);
+    const ax = (Math.min(...xs) + Math.max(...xs)) / 2, ay = (Math.min(...ys) + Math.max(...ys)) / 2, nx = (Math.min(...cx) + Math.max(...cx)) / 2, ny = (Math.min(...cy) + Math.max(...cy)) / 2;
+    ns.dPL = Math.max(0, Math.round((ax - nx) * -100) / 100); ns.dPV = Math.max(0, Math.round((ay - ny) * 100) / 100);
+  } else { ns.z0 = 0; ns.dPV = below.dPV; ns.dPL = Math.round((-Math.min(...xs)) * 100) / 100; } // a contatto, a sinistra
+  S.solids.push(ns); S.act = S.solids.length - 1;
+}
 function changed() { saveS(); rebuild(); const sz = JSON.stringify(scene()); if (sz !== lastSize) { lastSize = sz; fit(); } renderSide(); draw(); } // la vista si riadatta solo se i piani cambiano davvero
 function topOfOthers(i) { // il solido più alto fra quelli sotto l'impronta del solido i
   const m = buildSolid(S.solids[i]), xs = m.V.map(p => p[0]), ys = m.V.map(p => p[1]); let top = 0;
@@ -516,11 +552,10 @@ $('#side').addEventListener('click', e => {
   const sd = S.solids[S.act];
   if (b.dataset.g) { S.act = +b.dataset.g; saveS(); renderSide(); draw(); return; }
   if (b.dataset.st) { S.sec.type = b.dataset.st; const { W, D, H } = scene(); S.sec.pos = { oriz: Math.round(H / 2 * 2) / 2 - 1, front: Math.round((D - 3) / 2 * 2) / 2 + 1, lat: Math.round((W - 3) / 2 * 2) / 2 + 1, incl: Math.round(H / 2 * 2) / 2 - 1 }[b.dataset.st]; changed(); return; }
-  if (b.dataset.a === 'add') { // nuovo solido appoggiato sopra quello scelto, centrato sul suo asse
-    const m = buildSolid(sd), ns = newSolid('cilindro', { dims: { cilindro: { d: 2, h: 3 } } }), r = 1;
-    ns.dPL = Math.max(0, Math.round((-m.axis[0] - r) * 100) / 100); ns.dPV = Math.max(0, Math.round((m.axis[1] - r) * 100) / 100); ns.z0 = m.z1; // esattamente centrato
-    S.solids.push(ns); S.act = S.solids.length - 1; changed(); return;
-  }
+  if (b.dataset.a === 'add') { ADDING = { where: 'sopra' }; renderSide(); return; }
+  if (b.dataset.a === 'addno') { ADDING = null; renderSide(); return; }
+  if (b.dataset.w) { ADDING.where = b.dataset.w; renderSide(); return; }
+  if (b.dataset.pick) { addSolid(b.dataset.pick, ADDING.where); ADDING = null; changed(); return; }
   if (b.dataset.a === 'del') { S.solids.splice(S.act, 1); S.act = Math.max(0, S.act - 1); changed(); return; }
   if (b.dataset.a === 'ontop') { sd.z0 = topOfOthers(S.act); changed(); return; }
   if (b.dataset.t) { if (b.dataset.t === 'sec') S.sec.on = !S.sec.on; else if (b.dataset.t === 'cut') S.sec.cut = !S.sec.cut; else S[b.dataset.t] = !S[b.dataset.t]; changed(); return; }
