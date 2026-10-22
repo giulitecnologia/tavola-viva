@@ -38,6 +38,8 @@ button{font:inherit;color:inherit}
 /* area 3D */
 #stage{grid-row:2;grid-column:2;position:relative;overflow:hidden;min-width:0}
 #cv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;cursor:grab}
+#beta{position:absolute;left:50%;top:10px;transform:translateX(-50%);display:flex;align-items:center;gap:10px;max-width:calc(100% - 24px);padding:8px 8px 8px 14px;border-radius:12px;background:#fbe9dc;border:1px solid #ecc9ae;color:#6d3510;font-size:14px;font-weight:600;box-shadow:0 4px 16px #0001;z-index:2}
+#beta button{min-height:36px;padding:0 12px;border:1px solid #ecc9ae;border-radius:9px;background:#fff;font-weight:700;cursor:pointer;color:#6d3510}
 #hint{position:absolute;left:12px;bottom:10px;transition:opacity .6s;padding:7px 11px;border-radius:10px;background:#ffffffe6;border:1px solid var(--line);font-size:13.5px;color:var(--muted);pointer-events:none;max-width:calc(100% - 24px)}
 
 /* opzioni a destra */
@@ -73,11 +75,11 @@ button{font:inherit;color:inherit}
 <div id="app">
   <header id="top">
     <div class="brand"><svg class="logo" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 26a13 13 0 0 1 22 0" stroke-width="1.6" stroke-dasharray="2.5 2.5"/><path d="M16 4v3M16 7 9 26M16 7l7 19"/><circle cx="16" cy="8" r="2.2" fill="currentColor"/></svg><b>Tavola viva</b><span>· Proiezioni ortogonali</span></div>
-    <span class="test">Versione di prova</span>
+    <span class="test">In prova · non definitiva</span>
     <div class="spacer"></div>
     <button class="btn" id="view3d" title="Torna alla vista del triedro in prospettiva">Vista 3D</button>
     <button class="btn" id="viewFront" title="Guarda il triedro di fronte: con i piani aperti è il disegno sul foglio">Vista di fronte</button>
-    <a class="btn" href="./" title="Torna alla tavola"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5-7 7 7 7"/></svg>Tavola</a>
+    <a class="btn" href="index.html" title="Torna alla tavola"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5-7 7 7 7"/></svg>Tavola</a>
     <button class="btn" id="fsBtn" title="Schermo intero"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
   </header>
 
@@ -94,6 +96,7 @@ button{font:inherit;color:inherit}
 
   <main id="stage">
     <canvas id="cv" aria-label="Triedro di Monge con il solido e le sue proiezioni"></canvas>
+    <div id="beta" role="status"><span>⚠ <b>Sezione in prova</b>: le proiezioni non sono ancora definitive e possono cambiare.</span><button id="betaOk">Ho capito</button></div>
     <div id="hint">Trascina per girare il triedro · due dita per ingrandire e spostare</div>
   </main>
 
@@ -576,6 +579,8 @@ cv.addEventListener('dblclick', () => { CAM.zoom = 1; CAM.px = CAM.py = 0; draw(
 $('#fsBtn').onclick = () => { const el = document.documentElement; try { document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen(); } catch (_) { } };
 new ResizeObserver(layout).observe(stage);
 rebuild(); lastSize = JSON.stringify(scene()); renderSide(); setOpen(0); layout();
+$('#betaOk').onclick = () => { $('#beta').hidden = true; try { sessionStorage.setItem('tavolaviva.betaok', '1'); } catch (_) { } }; // l'avviso ricompare a ogni nuova apertura del browser
+try { if (sessionStorage.getItem('tavolaviva.betaok')) $('#beta').hidden = true; } catch (_) { }
 setTimeout(() => { $('#hint').style.opacity = 0; setTimeout(() => $('#hint').hidden = true, 700); }, 7000);
 window.PR = { S, CAM, setOpen, changed, get CUT() { return CUT; }, get MESH() { return MESH; }, edgesSeen, VIEWS, seen: n => seen(n) };
 })();
