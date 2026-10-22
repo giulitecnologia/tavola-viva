@@ -556,7 +556,7 @@ cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); pts
 cv.addEventListener('pointermove', e => {
   if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
   const P = [...pts.values()];
-  if (P.length === 1 && g0.P.length === 1) { CAM.yaw = clamp(g0.yaw - (P[0].x - g0.P[0].x) * 0.35, 0, 90); CAM.pitch = clamp(g0.pitch + (P[0].y - g0.P[0].y) * 0.35, 0, 89); B = basis(); }
+  if (P.length === 1 && g0.P.length === 1) { CAM.yaw = clamp(g0.yaw + (P[0].x - g0.P[0].x) * 0.35, 0, 90); /* come se si prendesse il triedro in mano: dito a destra, gira a destra */ CAM.pitch = clamp(g0.pitch + (P[0].y - g0.P[0].y) * 0.35, 0, 89); B = basis(); }
   else if (P.length >= 2 && g0.P.length >= 2) {
     const d0 = Math.hypot(g0.P[0].x - g0.P[1].x, g0.P[0].y - g0.P[1].y), d1 = Math.hypot(P[0].x - P[1].x, P[0].y - P[1].y);
     CAM.zoom = clamp(g0.zoom * d1 / Math.max(d0, 1), 0.4, 5);
