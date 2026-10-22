@@ -958,9 +958,10 @@ function onDown(p, e) {
     if (!gc.locked) {
       const cg = cgeom(gc), tol = (e.pointerType === 'touch' ? 34 : 18) / V.s, dC = dist(p, cg.C), dP = dist(p, cg.P);
       if (dC < tol && dC <= dP) return G0('gcenter', gc, { keep: true });
-      if (dP < tol) return G0('gopen', gc, { keep: true });
+      if (dP < tol) return G0('gtip', gc, { keep: true });
     }
-    return G0('trace', gc, { a0: gc.ang, prevA: Math.atan2(p.y - gc.y, p.x - gc.x), sw: 0, anywhere: true });
+    const fa = Math.atan2(p.y - gc.y, p.x - gc.x), far = Math.hypot(p.x - gc.x, p.y - gc.y) >= 0.4; // l'arco parte da dove si appoggia il dito (la matita ci va al primo movimento)
+    return G0('trace', gc, { a0: far ? fa : gc.ang, prevA: fa, sw: 0, anywhere: true });
   }
   // 1) maniglie dello strumento selezionato
   if (st && !st.locked) {
@@ -1017,6 +1018,12 @@ function onMove(p) {
   const g = gst; if (!g) return;
   const t = g.obj, dp = sub(p, g.p0);
   if (!g.moved && len(dp) * V.s < 3) return;
+  if (g.type === 'gtip') { // presa sulla punta della matita: movimento lungo l'arco = traccia, verso o lontano dall'ago = cambia apertura
+    if (len(dp) * V.s < 7) return;
+    const u = unit({ x: g.p0.x - t.x, y: g.p0.y - t.y }), radial = Math.abs(dot(dp, u)), tang = Math.abs(dp.x * u.y - dp.y * u.x);
+    if (tang > radial * 1.3) { g.type = 'trace'; g.a0 = t.ang; g.prevA = Math.atan2(g.p0.y - t.y, g.p0.x - t.x); g.sw = 0; g.anywhere = true; }
+    else g.type = 'gopen';
+  }
   g.moved = true;
   switch (g.type) {
     case 'pan': { U.cx = g.c0.x - (U.lastClient.x - g.s0.x) / V.s; U.cy = g.c0.y - (U.lastClient.y - g.s0.y) / V.s; layout(); return; }
@@ -1172,6 +1179,7 @@ function onUp(p) {
       if (U.cg.keepR) { U.cg = { id: t.id, phase: 'trace' }; changed(); toast('Ago spostato, stessa apertura: trascina il dito per tracciare.'); break; } // spostato toccando l'ago: l'apertura resta
       U.cg.phase = 'open'; changed(); toast('Ora tocca dove aprire il compasso, oppure scrivi la misura.'); break;
     }
+    case 'gtip':
     case 'gopen': {
       if (g.keep && !g.moved) { U.cg.phase = 'open'; renderCtx(); toast('Tocca dove aprire il compasso, oppure trascina la punta.'); break; }
       if (!g.moved) { if (!g.undone) pushUndo(); setOpen(t, p); }
@@ -1342,7 +1350,7 @@ function toolNear(p) {
 function gestureTool(g) {
   if (!g || !g.obj) return null;
   if (g.type === 'edge') return g.obj.t;
-  return ['move', 'rot', 'size', 'crot', 'cres', 'open', 'trace', 'gcenter', 'gopen', 'garc'].includes(g.type) ? g.obj : null;
+  return ['move', 'rot', 'size', 'crot', 'cres', 'open', 'trace', 'gcenter', 'gopen', 'garc', 'gtip'].includes(g.type) ? g.obj : null;
 }
 const poseOf = t => ({ x: t.x, y: t.y, a: t.kind === 'compasso' ? t.ang : t.rot });
 function setPose(t, o) { t.x = o.x; t.y = o.y; if (t.kind === 'compasso') t.ang = o.a; else t.rot = o.a; }
@@ -1938,7 +1946,8 @@ const GUIDA = [
   ['Compasso', [
     'Toccalo nella colonna a sinistra e segui i passi scritti in verde a destra: <b>1</b> tocca dove puntare l’ago, <b>2</b> tocca fin dove aprirlo (o scrivi la misura), <b>3</b> trascina il dito in qualsiasi punto per tracciare.',
     'Per <b>spostarlo</b>: trascina l’ago, oppure toccalo e poi tocca il nuovo punto. L’apertura resta uguale.',
-    'Per <b>cambiare apertura</b>: trascina la punta della matita (cerchietto arancione), oppure scrivi la misura in <b>Apertura cm</b>, oppure tocca una delle ultime aperture usate.',
+    'Per gli <b>archetti</b>: appoggia il dito proprio dove ti serve l’arco e trascina un poco girando intorno all’ago: l’arco parte da lì.',
+    'Per <b>cambiare apertura</b>: trascina la punta della matita (cerchietto arancione) verso l’ago o lontano da esso (trascinandola lungo l’arco, invece, traccia), oppure scrivi la misura in <b>Apertura cm</b>, oppure tocca una delle ultime aperture usate.',
     'Pulsanti utili: <b>Circonferenza intera</b>, <b>Arco da… a…</b>, <b>Segna il centro</b>, <b>Fine</b> per tornare al resto del disegno.']],
   ['Segmento', [
     'Tocca dove inizia e trascina fino a dove finisce. Gli estremi si agganciano a punti, linee e incroci dei quadretti.',
