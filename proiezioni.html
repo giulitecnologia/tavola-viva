@@ -101,7 +101,7 @@ button{font:inherit;color:inherit}
   <main id="stage">
     <canvas id="cv" aria-label="Triedro di Monge con il solido e le sue proiezioni"></canvas>
     <div id="beta" role="status"><span>⚠ <b>Sezione in prova</b>: le proiezioni non sono ancora definitive e possono cambiare.</span><button id="betaOk">Ho capito</button></div>
-    <div id="hint">Trascina per girare il triedro · due dita per ingrandire e spostare</div>
+    <div id="hint">Trascina un solido per spostarlo · trascina il vuoto per girare il triedro · due dita per ingrandire e spostare</div>
   </main>
 
   <aside id="side" aria-label="Misure e opzioni"></aside>
@@ -471,6 +471,7 @@ function render() {
     text3(P('PV', -W + 0.9, H - 0.7), 'PV', TH.accent, fs); text3(P('PO', -W + 0.9, D - 0.7), 'PO', TH.accent, fs); text3(P('PL', D - 0.9, H - 0.7), 'PL', TH.accent, fs);
     text3([-W - 0.2, 0, 0], 'LT', INK, fs * 0.85, 'right');
   }
+  if (DRAG) dragLabel();
 }
 function drawTrueShape() {
   const caps = CUT.flatMap(m => m.F.filter(f => f.cap).map(f => f.v.map(i => m.V[i]))); if (!caps.length) return;
@@ -542,9 +543,9 @@ function addSolid(kind, where) {
   S.solids.push(ns); S.act = S.solids.length - 1;
 }
 function changed() { saveS(); rebuild(); const sz = JSON.stringify(scene()); if (sz !== lastSize) { lastSize = sz; fit(); } renderSide(); draw(); } // la vista si riadatta solo se i piani cambiano davvero
-function topOfOthers(i) { // il solido più alto fra quelli sotto l'impronta del solido i
+function topOfOthers(i, skip) { // il solido più alto fra quelli sotto l'impronta del solido i (skip: solidi da non considerare)
   const m = buildSolid(S.solids[i]), xs = m.V.map(p => p[0]), ys = m.V.map(p => p[1]); let top = 0;
-  S.solids.forEach((o, j) => { if (j === i) return; const q = buildSolid(o), qx = q.V.map(p => p[0]), qy = q.V.map(p => p[1]); if (Math.max(...xs) > Math.min(...qx) && Math.min(...xs) < Math.max(...qx) && Math.max(...ys) > Math.min(...qy) && Math.min(...ys) < Math.max(...qy)) top = Math.max(top, q.z1); });
+  S.solids.forEach((o, j) => { if (j === i || (skip && skip.has(j))) return; const q = buildSolid(o), qx = q.V.map(p => p[0]), qy = q.V.map(p => p[1]); if (Math.max(...xs) > Math.min(...qx) && Math.min(...xs) < Math.max(...qx) && Math.max(...ys) > Math.min(...qy) && Math.min(...ys) < Math.max(...qy)) top = Math.max(top, q.z1); });
   return top;
 }
 $('#side').addEventListener('click', e => {
@@ -591,12 +592,66 @@ function animate(target, ms) {
 $('#viewFront').onclick = () => animate({ yaw: 0, pitch: 0 }, 1000);
 $('#view3d').onclick = () => { CAM.zoom = 1; CAM.px = CAM.py = 0; animate({ yaw: 38, pitch: 24 }, 1000); };
 
-/* ---------- gesti: un dito gira il triedro, due dita ingrandiscono e spostano ---------- */
-const pts = new Map(); let g0 = null;
+/* ---------- gesti: un dito su un solido lo sposta, un dito sul vuoto gira il triedro, due dita ingrandiscono e spostano ---------- */
+const pts = new Map(); let g0 = null, DRAG = null;
 function snap() { const P = [...pts.values()]; return { P: P.map(p => ({ ...p })), yaw: CAM.yaw, pitch: CAM.pitch, zoom: CAM.zoom, px: CAM.px, py: CAM.py }; }
-cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); g0 = snap(); anim = null; $('#hint').hidden = true; });
+const inPoly = (q, pg) => { let k = false; for (let i = 0, j = pg.length - 1; i < pg.length; j = i++) { const [xi, yi] = pg[i], [xj, yj] = pg[j]; if ((yi > q[1]) !== (yj > q[1]) && q[0] < (xj - xi) * (q[1] - yi) / (yj - yi) + xi) k = !k; } return k; };
+function solidAt(q) { // il solido toccato (il più vicino a chi guarda), solo a piani chiusi e con i solidi visibili
+  if (S.open > 0.5 || !S.solid) return -1;
+  let best = -1, bd = -Infinity;
+  MESH.forEach((m, i) => { const pg = hull(m.V.map(proj)); if (pg.length < 3 || !inPoly(q, pg)) return;
+    const d = Math.max(...m.V.map(p => dot3(p, B.c))); if (d > bd) { bd = d; best = i; } });
+  return best;
+}
+const half = v => Math.max(0, Math.round(v * 2) / 2); // scatti da mezzo centimetro, senza attraversare i piani
+const fp = sd => { const m = buildSolid(sd), xs = m.V.map(p => p[0]), ys = m.V.map(p => p[1]); return [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys), m.z1]; };
+function startDrag(i, q) {
+  const sd = S.solids[i], a = fp(sd);
+  // i solidi appoggiati sopra vengono portati insieme, come quando si sposta una pila
+  const ride = new Set(), look = [i];
+  while (look.length) { const k = look.pop(), b = fp(S.solids[k]); S.solids.forEach((o, j) => { if (ride.has(j) || j === i) return; const c = fp(o); if (Math.abs(o.z0 - b[4]) < 0.01 && c[1] > b[0] && c[0] < b[1] && c[3] > b[2] && c[2] < b[3]) { ride.add(j); look.push(j); } }); }
+  DRAG = { i, q, front: CAM.pitch < 12, start: S.solids.map(o => ({ dPL: o.dPL, dPV: o.dPV, z0: o.z0 })), ride, key: '' };
+  S.act = i; renderSide(); cv.style.cursor = 'grabbing';
+}
+function moveDrag(q) {
+  const s = fitS * CAM.zoom, dx = (q[0] - DRAG.q[0]) / s, dy = -(q[1] - DRAG.q[1]) / s, r = B.r, u = B.up, sd = S.solids[DRAG.i], st = DRAG.start[DRAG.i];
+  if (DRAG.front) { // vista di fronte (o di lato): orizzontale e su/giù
+    const k = CAM.yaw > 45 ? 1 : 0, det = r[k] * u[2] - r[2] * u[k], h = (dx * u[2] - dy * r[2]) / det, mz = (r[k] * dy - u[k] * dx) / det;
+    if (k) sd.dPV = half(st.dPV + h); else sd.dPL = half(st.dPL - h); sd.z0 = half(st.z0 + mz);
+  } else { // sul PO: destra/sinistra e avanti/indietro, con appoggio automatico sopra un altro solido o giù sul PO
+    // il solido resta sotto il dito: si prova ogni altezza di appoggio, dalla più alta, e si tiene la prima che torna
+    const det = r[0] * u[1] - r[1] * u[0], hs = [...new Set([0, ...S.solids.map((o, j) => j === DRAG.i || DRAG.ride.has(j) ? 0 : fp(o)[4])])].sort((p, q) => q - p);
+    for (const hz of hs) {
+      const ex = dx - (hz - st.z0) * r[2], ey = dy - (hz - st.z0) * u[2];
+      sd.dPL = half(st.dPL - (ex * u[1] - ey * r[1]) / det); sd.dPV = half(st.dPV + (r[0] * ey - u[0] * ex) / det);
+      sd.z0 = topOfOthers(DRAG.i, DRAG.ride); if (Math.abs(sd.z0 - hz) < 1e-6) break;
+    }
+  }
+  const ddPL = sd.dPL - st.dPL, ddPV = sd.dPV - st.dPV, dz = sd.z0 - st.z0;
+  for (const j of DRAG.ride) { const o = S.solids[j], t = DRAG.start[j]; o.dPL = Math.max(0, t.dPL + ddPL); o.dPV = Math.max(0, t.dPV + ddPV); o.z0 = t.z0 + dz; }
+  const key = [sd.dPL, sd.dPV, sd.z0].join();
+  if (key !== DRAG.key) { DRAG.key = key; rebuild(); renderSide(); draw(); }
+}
+function endDrag() { DRAG = null; cv.style.cursor = ''; changed(); }
+function dragLabel() { // le distanze accanto al solido trascinato
+  const m = MESH[DRAG.i]; if (!m) return; const sd = m.sd;
+  const V = [DRAG.i, ...DRAG.ride].flatMap(j => MESH[j] ? MESH[j].V : []), q = V.map(proj).reduce((a, p) => p[1] < a[1] ? p : a); // sopra la pila intera
+  const t = `da PV ${fmt(sd.dPV)} cm · da PL ${fmt(sd.dPL)} cm` + (sd.z0 > 0 ? ` · da PO ${fmt(sd.z0)} cm` : '');
+  const fs = clamp(fitS * CAM.zoom * 0.5, 15, 22); G.font = `700 ${fs}px ${getComputedStyle(document.body).fontFamily}`;
+  const w = G.measureText(t).width + 22, h = fs + 14, x = clamp(q[0] - w / 2, 6, CW - w - 6), y = clamp(q[1] - h - 14, 6, CH - h - 6);
+  G.setLineDash([]); G.fillStyle = 'rgba(255,255,255,.95)'; G.strokeStyle = TH.accent; G.lineWidth = 2; G.beginPath(); G.roundRect(x, y, w, h, 9); G.fill(); G.stroke();
+  G.fillStyle = INK; G.textAlign = 'center'; G.textBaseline = 'middle'; G.fillText(t, x + w / 2, y + h / 2 + 1);
+}
+const here = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+cv.addEventListener('pointerdown', e => {
+  cv.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); anim = null; $('#hint').hidden = true;
+  if (pts.size === 1) { const i = solidAt(here(e)); if (i >= 0) startDrag(i, here(e)); }
+  else if (DRAG) endDrag(); // un secondo dito: si passa a ingrandire e spostare
+  g0 = snap();
+});
 cv.addEventListener('pointermove', e => {
   if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (DRAG) { moveDrag(here(e)); return; }
   const P = [...pts.values()];
   if (P.length === 1 && g0.P.length === 1) { CAM.yaw = clamp(g0.yaw + (P[0].x - g0.P[0].x) * 0.35, 0, 90); /* come se si prendesse il triedro in mano: dito a destra, gira a destra */ CAM.pitch = clamp(g0.pitch + (P[0].y - g0.P[0].y) * 0.35, 0, 89); B = basis(); }
   else if (P.length >= 2 && g0.P.length >= 2) {
@@ -606,7 +661,7 @@ cv.addEventListener('pointermove', e => {
   }
   draw();
 });
-const up = e => { pts.delete(e.pointerId); g0 = snap(); };
+const up = e => { pts.delete(e.pointerId); if (DRAG) endDrag(); g0 = snap(); };
 cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
 cv.addEventListener('wheel', e => { e.preventDefault(); CAM.zoom = clamp(CAM.zoom * Math.exp(-e.deltaY * 0.0015), 0.4, 5); draw(); }, { passive: false });
 cv.addEventListener('dblclick', () => { CAM.zoom = 1; CAM.px = CAM.py = 0; draw(); });
@@ -617,7 +672,7 @@ rebuild(); lastSize = JSON.stringify(scene()); renderSide(); setOpen(0); layout(
 $('#betaOk').onclick = () => { $('#beta').hidden = true; try { sessionStorage.setItem('tavolaviva.betaok', '1'); } catch (_) { } }; // l'avviso ricompare a ogni nuova apertura del browser
 try { if (sessionStorage.getItem('tavolaviva.betaok')) $('#beta').hidden = true; } catch (_) { }
 setTimeout(() => { $('#hint').style.opacity = 0; setTimeout(() => $('#hint').hidden = true, 700); }, 7000);
-window.PR = { S, CAM, setOpen, changed, get CUT() { return CUT; }, get MESH() { return MESH; }, edgesSeen, VIEWS, seen: n => seen(n) };
+window.PR = { S, CAM, setOpen, changed, get CUT() { return CUT; }, get MESH() { return MESH; }, edgesSeen, VIEWS, seen: n => seen(n), proj, get DRAG() { return DRAG; } };
 })();
 </script>
 </body></html>
