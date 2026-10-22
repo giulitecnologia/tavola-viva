@@ -358,7 +358,7 @@ function applyTheme(id) {
 applyTheme(lsGet('tavolaviva.tema'));
 
 /* ================= documento ================= */
-const defaultSheet = () => ({ fmt: '33x24', orient: 'O', cw: 33, ch: 24, grid: true, frame: true, centri: true, margin: 1, gridSnap: true, stopLines: true, gsv: 3, magnet: true });
+const defaultSheet = () => ({ fmt: '33x24', orient: 'O', cw: 33, ch: 24, grid: false, frame: true, centri: true, margin: 1, gridSnap: true, stopLines: true, gsv: 3, magnet: true });
 // le tavole e le preferenze salvate prima che gli agganci diventassero predefiniti li attivano una volta
 const fixSheet = sh => { if (!(sh.gsv >= 2)) sh.gridSnap = true; if (!(sh.gsv >= 3)) sh.stopLines = true; sh.gsv = 3; return sh; };
 const SQMIN = { sq45: 22.5, sq3060: 32.5 }, SQSCALE = { sq45: 20, sq3060: 30 }, SQX0 = 0.5;
