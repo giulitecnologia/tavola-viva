@@ -407,7 +407,6 @@ function render() {
   }
   // linea di terra e spigoli del triedro
   line3([-W, 0, 0], [0, 0, 0], 2.2, INK); line3(P('PO', 0, 0), P('PO', 0, D), 1.6, rgba(TH.accent, .8)); line3(P('PL', 0, 0), P('PL', 0, H), 1.6, rgba(TH.accent, .8));
-  if (opened) line3([0, 0, 0], [D, 0, -D], thin, THIN, [8, 5]); // retta a 45°
   // tracce del piano secante sui tre piani
   if (PLANE) for (const [n, [u0, u1, v0, v1]] of planes) { const tr = traceOn(n, u0, u1, v0, v1); if (tr) { line3(P(n, ...tr[0]), P(n, ...tr[1]), 2.2, SEC, [14, 5, 3, 5]); text3(P(n, ...tr[1]), 't', SEC, fs * 0.8); } }
   // linee di richiamo, a piani aperti
@@ -416,7 +415,12 @@ function render() {
     const xmin = Math.min(...X), zmax = Math.max(...Z), ymax = Math.max(...Y);
     for (const x of X) line3([x, 0, zmax], [x, 0, -ymax], thin, '#9aa7b2');
     for (const z of Z) line3([xmin, 0, z], [ymax, 0, z], thin, '#9aa7b2');
-    for (const y of Y) { line3([xmin, 0, -y], [y, 0, -y], thin, '#9aa7b2'); line3([y, 0, -y], [y, 0, zmax], thin, '#9aa7b2'); }
+    // da PO a PL con archi di circonferenza centrati nell'angolo del triedro: la stessa rotazione dei piani
+    for (const y of Y) {
+      line3([xmin, 0, -y], [0, 0, -y], thin, '#9aa7b2');
+      if (y > 1e-6) { let prev = [0, 0, -y]; for (let k = 1; k <= 24; k++) { const a = k / 24 * Math.PI / 2, q = [y * Math.sin(a), 0, -y * Math.cos(a)]; line3(prev, q, thin, '#9aa7b2'); prev = q; } }
+      line3([y, 0, 0], [y, 0, zmax], thin, '#9aa7b2');
+    }
   }
   // proiezioni sui tre piani
   for (const name of ['PV', 'PO', 'PL']) {
@@ -511,7 +515,7 @@ $('#side').addEventListener('click', e => {
   if (b.dataset.st) { S.sec.type = b.dataset.st; const { W, D, H } = scene(); S.sec.pos = { oriz: Math.round(H / 2 * 2) / 2 - 1, front: Math.round((D - 3) / 2 * 2) / 2 + 1, lat: Math.round((W - 3) / 2 * 2) / 2 + 1, incl: Math.round(H / 2 * 2) / 2 - 1 }[b.dataset.st]; changed(); return; }
   if (b.dataset.a === 'add') { // nuovo solido appoggiato sopra quello scelto, centrato sul suo asse
     const m = buildSolid(sd), ns = newSolid('cilindro', { dims: { cilindro: { d: 2, h: 3 } } }), r = 1;
-    ns.dPL = Math.max(0, Math.round((-m.axis[0] - r) * 2) / 2); ns.dPV = Math.max(0, Math.round((m.axis[1] - r) * 2) / 2); ns.z0 = m.z1;
+    ns.dPL = Math.max(0, Math.round((-m.axis[0] - r) * 100) / 100); ns.dPV = Math.max(0, Math.round((m.axis[1] - r) * 100) / 100); ns.z0 = m.z1; // esattamente centrato
     S.solids.push(ns); S.act = S.solids.length - 1; changed(); return;
   }
   if (b.dataset.a === 'del') { S.solids.splice(S.act, 1); S.act = Math.max(0, S.act - 1); changed(); return; }
@@ -525,11 +529,11 @@ $('#side').addEventListener('click', e => {
   else sd[k] = clamp(Math.round((sd[k] + dv) * 10) / 10, 0, 20);
   changed();
 });
-// cambiando tipo, il solido resta centrato dov'era (così un solido appoggiato sopra un altro rimane sul suo asse)
+// cambiando tipo, un solido appoggiato sopra un altro resta centrato dov'era; quello su PO mantiene le sue distanze da PV e PL
 const centerOf = sd => { const m = buildSolid(sd), xs = m.V.map(p => p[0]), ys = m.V.map(p => p[1]); return [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2]; };
 document.querySelectorAll('.sol').forEach(b => b.onclick = () => {
   const sd = S.solids[S.act], c0 = centerOf(sd); sd.kind = b.dataset.s; const c1 = centerOf(sd);
-  sd.dPL = Math.max(0, Math.round((sd.dPL - (c0[0] - c1[0])) * 100) / 100); sd.dPV = Math.max(0, Math.round((sd.dPV + (c0[1] - c1[1])) * 100) / 100);
+  if (sd.z0 > 0) sd.dPL = Math.max(0, Math.round((sd.dPL - (c0[0] - c1[0])) * 100) / 100); if (sd.z0 > 0) sd.dPV = Math.max(0, Math.round((sd.dPV + (c0[1] - c1[1])) * 100) / 100);
   changed();
 });
 
