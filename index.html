@@ -883,7 +883,7 @@ function paintOverlay() {
   else if (pv && pv.kind === 'free') pencilAt({ x: pv.pts[pv.pts.length - 1][0], y: pv.pts[pv.pts.length - 1][1] });
   else if (gst.type === 'edge') pencilAt(add(gst.obj.a, mul(gst.obj.d, gst.u0)));
   if (gst.label) measureTag(gst.label.text, gst.label.at, false);
-  if (gst.snapPt) { ring(gst.snapPt); if (gst.snapPt.mid) measureTag('metà', add(gst.snapPt, { x: 0, y: -26 / V.s }), false); }
+  if (gst.snapPt) ring(gst.snapPt);
   if (gst.alignPts) for (const q of gst.alignPts) ring(q);
   if (gst.piv) { ring(gst.piv); dotAt(gst.piv, SNAPC); }
 }
@@ -1950,7 +1950,7 @@ const GUIDA = [
     'Per <b>cambiare apertura</b>: trascina la punta della matita (cerchietto arancione) verso l’ago o lontano da esso (trascinandola lungo l’arco, invece, traccia), oppure scrivi la misura in <b>Apertura cm</b>, oppure tocca una delle ultime aperture usate.',
     'Pulsanti utili: <b>Circonferenza intera</b>, <b>Arco da… a…</b>, <b>Segna il centro</b>, <b>Fine</b> per tornare al resto del disegno.']],
   ['Segmento', [
-    'Tocca dove inizia e trascina fino a dove finisce. Gli estremi si agganciano a punti, linee e incroci dei quadretti, e anche al <b>centro dei segmenti</b> (compare la scritta <b>metà</b>).',
+    'Tocca dove inizia e trascina fino a dove finisce. Gli estremi si agganciano a punti, linee e incroci dei quadretti, e anche al <b>centro dei segmenti</b> (mentre disegni è segnato con un <b>rombino</b>).',
     'Con <b>Angolo: Guidato</b> il segmento si blocca su orizzontale, verticale, 45°, 30°, 60° (multipli di 15°) e diventa <b>parallelo ∥</b> o <b>perpendicolare ⊥</b> ai segmenti già disegnati: è come avere le squadre invisibili. Con <b>Libero</b> va in qualsiasi direzione.',
     'Con lunghezza <b>Precisa</b> il segmento misura esattamente i cm scritti, nella direzione in cui trascini.',
     'Interruttori a destra: <b>Quadretti</b> (aggancio agli incroci) e <b>Linee</b> (si ferma sulle linee già disegnate).']],
