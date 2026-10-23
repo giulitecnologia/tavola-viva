@@ -127,6 +127,7 @@ a.btn{text-decoration:none;color:inherit;box-sizing:border-box}
 .row>.k{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
 .row .wrap{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .note{font-size:13.5px;line-height:1.45;color:var(--muted);background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.note.report{margin-bottom:12px}.note.report .wrap{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}.note.report a.btn{text-decoration:none}
 .note.warn{color:#6d3510;background:var(--warn-soft);border-color:#ecc9ae}
 .list{display:flex;flex-direction:column;gap:6px}
 .item{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px 6px 6px 12px}
@@ -1754,7 +1755,7 @@ document.addEventListener('keydown', e => {
 
 /* ================= toast ================= */
 let toastT = 0;
-function toast(msg, kind) { const el = $('#toast'); el.textContent = msg; el.className = 'show' + (kind ? ' ' + kind : ''); clearTimeout(toastT); toastT = setTimeout(() => el.className = '', kind === 'warn' ? 4200 : 2600); }
+function toast(msg, kind) { const el = $('#toast'); el.textContent = msg; el.className = 'show' + (kind ? ' ' + kind : ''); clearTimeout(toastT); toastT = setTimeout(() => el.className = '', kind === 'warn' ? 4200 : kind === 'long' ? 6000 : 2600); }
 
 /* ================= barra superiore e palette ================= */
 function renderTop() {
@@ -1994,8 +1995,12 @@ const GUIDA = [
     '<b>PDF</b> e <b>PNG</b> della tavola e dei passaggi, in scala reale.',
     'In Tavole trovi anche alcune <b>costruzioni preparate</b> da mostrare passo passo.']],
 ];
+const REPORT_MAIL = 'giulia.pinotti2024@smpavullo.com'; // segnalazioni dei colleghi: per toglierle, togliere il riquadro qui sotto
 function guideHTML() {
-  return `<div class="guide"><div class="intro">Tocca una voce per leggere come si usa. Su ogni strumento, la barra a destra ricorda anche il passo successivo.</div>${GUIDA.map(([t, li]) => `<details><summary>${t}</summary><ul>${li.map(x => `<li>${x}</li>`).join('')}</ul></details>`).join('')}</div>`;
+  const sub = 'Tavola viva: segnalazione', body = 'Cosa stavo facendo:\n\nCosa è successo:\n\nDove (LIM o computer, browser):\n\n';
+  return `<div class="note report"><b>Qualcosa non funziona o hai un’idea?</b> Scrivi a <b>${REPORT_MAIL}</b>: ogni segnalazione aiuta a migliorare Tavola viva.
+    <div class="wrap"><a class="btn primary" href="https://mail.google.com/mail/?view=cm&fs=1&to=${REPORT_MAIL}&su=${encodeURIComponent(sub)}&body=${encodeURIComponent(body)}" target="_blank" rel="noopener">Scrivi con Gmail</a><a class="btn" href="mailto:${REPORT_MAIL}?subject=${encodeURIComponent(sub)}&body=${encodeURIComponent(body)}">Altra posta</a><button class="btn" data-a="copymail">Copia indirizzo</button></div></div>
+  <div class="guide"><div class="intro">Tocca una voce per leggere come si usa. Su ogni strumento, la barra a destra ricorda anche il passo successivo.</div>${GUIDA.map(([t, li]) => `<details><summary>${t}</summary><ul>${li.map(x => `<li>${x}</li>`).join('')}</ul></details>`).join('')}</div>`;
 }
 // benvenuto alla prima apertura
 function showWelcome() {
@@ -2067,6 +2072,7 @@ $('#drawerBody').addEventListener('click', e => {
     case 'openlocal': { const bd = kvGet(LS.boards) || {}; if (bd[v]) { leaveExample(); FILEH = null; loadDoc(bd[v].doc); D.example = false; changed(); closeDrawer(); toast('Aperta “' + v + '”'); } break; }
     case 'dellocal': confirmBox('Eliminare “' + v + '” da questo dispositivo?', 'Elimina', () => { const bd = kvGet(LS.boards) || {}; delete bd[v]; kvSet(LS.boards, bd); renderDrawer(); }); break;
     case 'saveasfile': saveAsFile(); break;
+    case 'copymail': (navigator.clipboard ? navigator.clipboard.writeText(REPORT_MAIL) : Promise.reject()).then(() => toast('Indirizzo copiato: ' + REPORT_MAIL), () => toast('Indirizzo: ' + REPORT_MAIL, 'long')); break;
     case 'downloadall': downloadAll(); break;
     case 'openfile': openFile(); break;
     case 'pdf': exportPDF(); break;
@@ -2090,10 +2096,16 @@ function saveBoard() {
   const c = clone(D); delete c.example; delete c.exEdited; bd[D.name] = { savedAt: Date.now(), doc: c };
   const ok = kvSet(LS.boards, bd); if (ok) { if (D.example) D.example = false; renderTop(); }
   if (FILEH) { const h = FILEH; writeFile(h).then(() => toast('Tavola “' + D.name + '” salvata, anche nel file ' + h.name)).catch(() => toast('Salvata nel browser, ma il file ' + h.name + ' non si è aggiornato: usa “Salva come file…”.', 'warn')); }
-  else if (ok) toast('Tavola “' + D.name + '” salvata');
+  else if (ok) { toast('Tavola “' + D.name + '” salvata in questo browser' + (fileTipShown ? '' : '. Per ritrovarla anche su altri computer o account: Tavole → Salva come file…'), fileTipShown ? '' : 'long'); fileTipShown = true; }
+  if (ok || FILEH) SAVED = savedKey();
   if (!ok) toast('Salvataggio non riuscito in questo browser: salvala come file.', 'warn');
 }
-/* ---------- tavole come file: sul computer o nella cartella di Drive ---------- */
+/* ---------- avviso prima di perdere il lavoro ---------- */
+// se si chiude la pagina con modifiche mai salvate (né nell'elenco Tavole né nel file), il browser chiede conferma
+let SAVED = '', fileTipShown = false;
+const savedKey = () => JSON.stringify([D.strokes, D.header]);
+window.addEventListener('beforeunload', e => { if (!D.example && D.strokes.length && savedKey() !== SAVED) { e.preventDefault(); e.returnValue = ''; } });
+/* ---------- tavole come file: sul computer ---------- */
 let FILEH = null, FILEH_PREV = null; // il file collegato alla tavola aperta: Salva lo aggiorna (nei browser che lo permettono)
 // in una finestra dentro un'altra pagina (anteprima) il browser non permette di scegliere file: si scarica e si apre col selettore classico
 const IN_FRAME = (() => { try { return window.top !== window.self; } catch (_) { return true; } })();
@@ -2110,7 +2122,7 @@ async function saveAsFile() {
   let h; try { h = await showSaveFilePicker({ suggestedName: safeName(D.name) + EXT, types: FILE_TYPES, excludeAcceptAllOption: true }); } catch (e) { if (e && e.name === 'AbortError') return; return downloadDoc(); }
   if (D.name === 'Tavola senza nome') { D.name = h.name.replace(/\.(tavola|json)$/i, ''); changed(); }
   try { await writeFile(h); } catch (_) { toast('Non sono riuscita a scrivere il file: scaricalo.', 'warn'); return downloadDoc(); }
-  FILEH = h; if (D.example) D.example = false; renderTop(); if (drawerKind) renderDrawer();
+  FILEH = h; SAVED = savedKey(); if (D.example) D.example = false; renderTop(); if (drawerKind) renderDrawer();
   toast('Salvata nel file ' + h.name + '. D’ora in poi Salva aggiorna anche questo file.');
 }
 async function openFile() {
@@ -2160,7 +2172,7 @@ function loadDoc(o) {
   fixTxt(D.strokes); D.steps.forEach(st => fixTxt(st.strokes || []));
   const fixSq = arr => arr.forEach(t => { if (SQMIN[t.kind] && !(t.len >= SQMIN[t.kind])) t.len = SQMIN[t.kind]; });
   fixSq(D.tools); D.steps.forEach(s => fixSq(s.tools || []));
-  undoS = []; redoS = []; U.view = -1; U.viewData = null; U.sel = null; U.selS = []; U.addSel = false; gst = null; U.zoom = 1; layout(); changed(); if (typeof renderView === 'function') renderView();
+  SAVED = savedKey(); undoS = []; redoS = []; U.view = -1; U.viewData = null; U.sel = null; U.selS = []; U.addSel = false; gst = null; U.zoom = 1; layout(); changed(); if (typeof renderView === 'function') renderView();
 }
 function renderToCanvas(data, pxPerCm, opts) {
   const { w, h } = sheetDims(data.sheet), c = document.createElement('canvas'); c.width = Math.round(w * pxPerCm); c.height = Math.round(h * pxPerCm);
