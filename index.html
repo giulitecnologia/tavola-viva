@@ -268,7 +268,7 @@ a.btn{text-decoration:none;color:inherit;box-sizing:border-box}
     <div class="padrow"><button class="key fn" id="cfNo">Annulla</button><button class="key ok" id="cfYes">Conferma</button></div>
   </div>
 </div>
-<input type="file" id="fileIn" accept=".tavola,.json" hidden>
+<input type="file" id="fileIn" accept=".html,.htm,.tavola,.json" hidden>
 <script>
 (() => {
 'use strict';
@@ -1990,7 +1990,7 @@ const GUIDA = [
     '<b>Tavole</b>: elenco delle tavole salvate da aprire; <b>Nuovo foglio</b> mette da parte il lavoro attuale nell’elenco.',
     'L’elenco <b>Tavole</b> resta solo <b>in questo browser, in questo profilo di Chrome e su questo computer</b>: cambiando account (per esempio da quello personale a quello della scuola) o computer non si vede. Per averle ovunque, usa Salva come file o Scarica tutte le tavole.',
     '<b>Salva come file…</b>: scegli tu dove metterla (Documenti, una chiavetta…). Da lì in poi <b>Salva</b> aggiorna anche quel file (dove il browser non lo permette, il file si scarica in Download). Per averla su Drive, carica il file su drive.google.com.',
-    '<b>Riapri un file salvato…</b>: riapre una tavola salvata come file, da qualunque computer. Il file (.tavola) si apre da qui, non con il doppio clic.',
+    '<b>Per riaprire il file</b>: doppio clic, si vede il disegno e il pulsante <b>Apri in Tavola viva</b> lo riporta nell’app (serve internet). Oppure, da Tavole, <b>Riapri un file salvato…</b>',
     '<b>Scarica tutte le tavole</b>: un unico file con tutte le tavole e gli esempi. Aprendolo con Riapri un file salvato… in un altro profilo o computer, le ritrovi tutte nell’elenco.',
     '<b>PDF</b> e <b>PNG</b> della tavola e dei passaggi, in scala reale.',
     'In Tavole trovi anche alcune <b>costruzioni preparate</b> da mostrare passo passo.']],
@@ -2039,7 +2039,7 @@ function boardsHTML() {
   return `<div class="row"><span class="k">Tavola aperta</span><div class="wrap"><button class="btn" data-a="rename" style="flex:1;justify-content:flex-start;min-width:0;overflow:hidden">${esc(D.name)}</button><button class="btn primary" data-a="savelocal">Salva</button></div><div class="wrap"><button class="btn" data-a="new">Nuovo foglio bianco</button></div></div>
   <div class="row"><span class="k">Salvate in questo browser</span><div class="list">${names.length ? names.map(n => `<div class="item"><span class="nm">${esc(n)}<br><span class="dt">${new Date(boards[n].savedAt || 0).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })} · ${(boards[n].doc.steps || []).length} passaggi</span></span><button class="btn" data-a="openlocal" data-v="${esc(n)}">Apri</button><button class="btn ghost" data-a="dellocal" data-v="${esc(n)}">Elimina</button></div>`).join('') : '<div class="empty">Nessuna tavola salvata.</div>'}</div></div>
   <div class="row"><span class="k">Tavola come file, per ritrovarla ovunque (consigliato)</span><div class="wrap"><button class="btn primary" data-a="saveasfile">${FS_OK ? 'Salva come file…' : 'Scarica file della tavola'}</button><button class="btn" data-a="openfile">Riapri un file salvato…</button></div>
-    ${FILEH ? `<div class="empty">Collegata al file <b>${esc(FILEH.name)}</b>: ogni volta che premi <b>Salva</b> si aggiorna anche il file.</div>` : `<div class="empty">${FS_OK ? 'Scegli tu dove metterla (Documenti, una chiavetta…): da lì in poi <b>Salva</b> aggiorna anche quel file.' : 'Il file (.tavola) finisce nella cartella Download.'} Per portarla su Drive, caricalo su drive.google.com come un qualsiasi file.<br><b>Per riaprirla</b> non serve il doppio clic sul file: apri Tavola viva e premi <b>Riapri un file salvato…</b>, da qualunque computer.</div>`}
+    ${FILEH ? `<div class="empty">Collegata al file <b>${esc(FILEH.name)}</b>: ogni volta che premi <b>Salva</b> si aggiorna anche il file.</div>` : `<div class="empty">${FS_OK ? 'Scegli tu dove metterla (Documenti, una chiavetta…): da lì in poi <b>Salva</b> aggiorna anche quel file.' : 'Il file finisce nella cartella Download.'} Per portarla su Drive, caricalo su drive.google.com come un qualsiasi file.<br><b>Per riaprirla</b> fai doppio clic sul file: vedi il disegno e il pulsante <b>Apri in Tavola viva</b>. Oppure, da qui, <b>Riapri un file salvato…</b></div>`}
     <div class="wrap"><button class="btn" data-a="downloadall">Scarica tutte le tavole</button></div>
     <div class="empty">Un unico file con tutte le tavole e gli esempi di questo browser: con <b>Riapri un file salvato…</b> le ritrovi tutte nell’elenco, in un altro computer o in un altro profilo.</div></div>
   <div class="row"><span class="k">Scarica PDF o immagine</span><div class="wrap"><button class="btn primary" data-a="pdf">Tavola in PDF</button><button class="btn primary" data-a="pdfsteps">Passaggi in PDF</button></div><div class="wrap"><button class="btn" data-a="png">Tavola in PNG</button><button class="btn" data-a="pngsteps">Passaggi in PNG</button></div><div class="empty">La tavola: bordo del foglio, squadratura, cartigli e segni. Il PDF è in scala reale (1 cm = 1 cm). I passaggi in PDF: una pagina per passaggio, con gli strumenti nella loro posizione; in PNG: tutte le fasi in un'unica immagine.</div></div>
@@ -2109,18 +2109,47 @@ window.addEventListener('beforeunload', e => { if (!D.example && D.strokes.lengt
 let FILEH = null, FILEH_PREV = null; // il file collegato alla tavola aperta: Salva lo aggiorna (nei browser che lo permettono)
 // in una finestra dentro un'altra pagina (anteprima) il browser non permette di scegliere file: si scarica e si apre col selettore classico
 const IN_FRAME = (() => { try { return window.top !== window.self; } catch (_) { return true; } })();
-const FS_OK = 'showSaveFilePicker' in window && !IN_FRAME, EXT = '.tavola';
-const FILE_TYPES = [{ description: 'Tavola viva', accept: { 'application/octet-stream': [EXT] } }], OPEN_TYPES = [{ description: 'Tavola viva', accept: { 'application/octet-stream': [EXT, '.json'] } }]; // .json: i file salvati prima
-const docJSON = () => { const c = clone(D); delete c.example; delete c.exEdited; return JSON.stringify(c, null, 1); };
+const FS_OK = 'showSaveFilePicker' in window && !IN_FRAME, EXT = '.html';
+const FILE_TYPES = [{ description: 'Tavola viva (pagina che si apre con il doppio clic)', accept: { 'text/html': [EXT] } }], OPEN_TYPES = [{ description: 'Tavola viva', accept: { 'text/html': ['.html', '.htm'], 'application/octet-stream': ['.tavola', '.json'] } }]; // .tavola e .json: i file salvati prima
+const APP_URL = /^https?:$/.test(location.protocol) && !/claude\.ai|claudeusercontent/.test(location.hostname) ? location.origin + location.pathname.replace(/[^/]*$/, '') : 'https://giulitecnologia.github.io/tavola-viva/';
+const MAX_LINK = 1000000; // oltre questa lunghezza il browser potrebbe rifiutare il collegamento
+const docObj = () => { const c = clone(D); delete c.example; delete c.exEdited; return c; };
+/* il file è una piccola pagina web: col doppio clic mostra il disegno e un pulsante che apre la tavola nell'app (i dati viaggiano compressi nel collegamento) */
+async function packLink(o) {
+  try {
+    const cs = new Blob([JSON.stringify(o)]).stream().pipeThrough(new CompressionStream('deflate-raw')), u8 = new Uint8Array(await new Response(cs).arrayBuffer());
+    let bin = ''; for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+    const link = APP_URL + '#tavola=' + btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    return link.length < MAX_LINK ? link : null;
+  } catch (_) { return null; }
+}
+async function unpackLink(b64) {
+  const bin = atob(b64.replace(/-/g, '+').replace(/_/g, '/')), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return new Response(new Blob([u8]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+}
+const escH = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+async function fileHTML(o, opts) { // opts: { title, img, sub, btn }
+  const link = await packLink(o), data = JSON.stringify(o).replace(/</g, '\\u003c');
+  return `<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escH(opts.title)} · Tavola viva</title>
+<style>body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#cdd9d2;color:#1c2126}main{max-width:1100px;margin:0 auto;padding:22px 16px 40px}h1{margin:0 0 4px;font-size:26px}.sub{color:#4f5b63;margin:0 0 16px}
+img{display:block;width:100%;height:auto;background:#fff;border-radius:6px;box-shadow:0 6px 24px #1d282b33;margin-bottom:18px}.btn{display:inline-block;background:#1f5c45;color:#fff;font-weight:700;font-size:20px;padding:14px 26px;border-radius:12px;text-decoration:none}
+.note{margin:10px 0 18px;color:#4f5b63;font-size:15px;line-height:1.5;max-width:720px}</style></head>
+<body><main><h1>${escH(opts.title)}</h1><p class="sub">${escH(opts.sub)}</p>
+${link ? `<a class="btn" href="${link}">${escH(opts.btn)}</a><p class="note">Serve la connessione a internet. ` : '<p class="note"><b>Questo file è troppo grande per il pulsante.</b> '}Se il pulsante non funziona: apri Tavola viva, vai in <b>Tavole</b> e premi <b>Riapri un file salvato…</b>, poi scegli questo file.</p>
+${opts.img ? `<img src="${opts.img}" alt="${escH(opts.title)}">` : ''}</main>
+<script type="application/json" id="tavola-viva-dati">${data}<\/script></body></html>`; // <\/script>: altrimenti chiuderebbe lo script della pagina
+}
+const docFile = async () => { const o = docObj(), { w, h } = sheetDims(o.sheet), c = renderToCanvas(o, Math.min(40, 1600 / Math.max(w, h)));
+  return fileHTML(o, { title: o.name, img: c.toDataURL('image/png'), sub: 'Tavola viva · salvata il ' + new Date().toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }), btn: 'Apri in Tavola viva' }); };
 async function writeFile(h) {
   if (h.queryPermission && await h.queryPermission({ mode: 'readwrite' }) !== 'granted' && await h.requestPermission({ mode: 'readwrite' }) !== 'granted') throw new Error('permesso');
-  const w = await h.createWritable(); await w.write(docJSON()); await w.close();
+  const txt = await docFile(), w = await h.createWritable(); await w.write(txt); await w.close();
 }
-const downloadDoc = () => downloadBlob(new Blob([docJSON()], { type: 'application/octet-stream' }), safeName(D.name) + EXT);
+const downloadDoc = async () => downloadBlob(new Blob([await docFile()], { type: 'text/html' }), safeName(D.name) + EXT);
 async function saveAsFile() {
   if (!FS_OK) return downloadDoc();
   let h; try { h = await showSaveFilePicker({ suggestedName: safeName(D.name) + EXT, types: FILE_TYPES, excludeAcceptAllOption: true }); } catch (e) { if (e && e.name === 'AbortError') return; return downloadDoc(); }
-  if (D.name === 'Tavola senza nome') { D.name = h.name.replace(/\.(tavola|json)$/i, ''); changed(); }
+  if (D.name === 'Tavola senza nome') { D.name = h.name.replace(/\.(html?|tavola|json)$/i, ''); changed(); }
   try { await writeFile(h); } catch (_) { toast('Non sono riuscita a scrivere il file: scaricalo.', 'warn'); return downloadDoc(); }
   FILEH = h; SAVED = savedKey(); if (D.example) D.example = false; renderTop(); if (drawerKind) renderDrawer();
   toast('Salvata nel file ' + h.name + '. D’ora in poi Salva aggiorna anche questo file.');
@@ -2131,6 +2160,7 @@ async function openFile() {
   openText_(await (await h.getFile()).text(), h);
 }
 function openText_(txt, h) {
+  const m = /<script type="application\/json" id="tavola-viva-dati">([\s\S]*?)<\/script>/.exec(txt); if (m) txt = m[1]; // file salvato come pagina
   let o; try { o = JSON.parse(txt); } catch (_) { o = null; }
   if (o && o.app === 'tavolaviva-archivio') return importAll(o);
   if (!o || o.app !== 'tavolaviva' || !Array.isArray(o.strokes)) { toast('Questo file non è una tavola di Tavola viva.', 'warn'); return; }
@@ -2141,7 +2171,9 @@ function openText_(txt, h) {
 function downloadAll() {
   const bd = kvGet(LS.boards) || {}, ex = kvGet(LS.esempi) || {}, n = Object.keys(bd).length + Object.keys(ex).length;
   if (!n) { toast('In questo browser non ci sono tavole salvate.', 'warn'); return; }
-  downloadBlob(new Blob([JSON.stringify({ app: 'tavolaviva-archivio', savedAt: Date.now(), boards: bd, esempi: ex })], { type: 'application/octet-stream' }), 'tutte-le-tavole-' + new Date().toISOString().slice(0, 10) + EXT);
+  const o = { app: 'tavolaviva-archivio', savedAt: Date.now(), boards: bd, esempi: ex };
+  fileHTML(o, { title: 'Tutte le tavole', sub: n + (n === 1 ? ' tavola' : ' tavole') + ' di Tavola viva · ' + new Date().toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) + ': ' + Object.keys(bd).concat(Object.keys(ex)).join(', '), btn: 'Aggiungi queste tavole a Tavola viva' })
+    .then(t => downloadBlob(new Blob([t], { type: 'text/html' }), 'tutte-le-tavole-' + new Date().toISOString().slice(0, 10) + EXT));
 }
 function importAll(o) { // aggiunge all'elenco le tavole dell'archivio, senza toccare quelle che ci sono già
   const bd = kvGet(LS.boards) || {}, ex = kvGet(LS.esempi) || {}; let n = 0;
@@ -2367,11 +2399,19 @@ window.addEventListener('pagehide', () => { clearTimeout(saveTimer); kvSet(LS.au
     layout(); changed();
   }
   renderTop(); renderCtx();
-  if (!lsGet('tavolaviva.benvenuto')) showWelcome();
+  if (location.hash.startsWith('#tavola=')) { lsSet('tavolaviva.benvenuto', 1); openFromLink(); }
+  else if (!lsGet('tavolaviva.benvenuto')) showWelcome();
 })();
 
 /* app installabile: sul sito si può installare come un'app e funziona anche senza internet */
 if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claude\.ai|claudeusercontent/.test(location.hostname)) navigator.serviceWorker.register('sw.js').catch(() => { });
+
+/* tavola arrivata dal pulsante «Apri in Tavola viva» di un file salvato */
+// (viene chiamata all'avvio, dopo aver ripreso l'ultimo lavoro, che così resta al sicuro nell'elenco Tavole)
+function openFromLink() {
+  if (!location.hash.startsWith('#tavola=')) return; const b64 = location.hash.slice(8); history.replaceState(null, '', location.pathname + location.search);
+  unpackLink(b64).then(t => openText_(t, null), () => toast('Non sono riuscita ad aprire la tavola: usa Tavole → Riapri un file salvato…', 'warn'));
+}
 
 /* app installata: un doppio clic su un file .tavola la apre direttamente qui */
 if ('launchQueue' in window) launchQueue.setConsumer(async p => { const h = p.files && p.files[0]; if (h) openText_(await (await h.getFile()).text(), h); });
