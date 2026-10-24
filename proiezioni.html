@@ -324,13 +324,13 @@ function rebuild() {
 }
 let VCACHE = {};
 function seen(name) { return VCACHE[name] || (VCACHE[name] = edgesSeen(CUT, VIEWS[name].t)); }
-// piani di misura fissa, come un foglio vero: cambiando le misure dei solidi non si muovono;
-// si allargano (di centimetri interi) solo se un solido non ci sta più, e non tornano mai più piccoli
-const PLANES = { W: 16, D: 9, H: 12 };
+// piani di misura fissa, come un foglio vero: PV, PO e PL sono quadrati uguali, così aperti formano quattro quadranti uguali;
+// cambiando le misure dei solidi non si muovono, si allargano (di centimetri interi) solo se un solido non ci sta più e non tornano mai più piccoli
+const PLANES = { L: 12 };
 function scene() {
   const xs = MESH.flatMap(m => m.V.map(p => p[0])), ys = MESH.flatMap(m => m.V.map(p => p[1])), zs = MESH.flatMap(m => m.V.map(p => p[2]));
-  PLANES.W = Math.max(PLANES.W, Math.ceil(-Math.min(...xs) + 2)); PLANES.D = Math.max(PLANES.D, Math.ceil(Math.max(...ys) + 2)); PLANES.H = Math.max(PLANES.H, Math.ceil(Math.max(...zs) + 2));
-  return { W: PLANES.W, D: PLANES.D, H: PLANES.H };
+  PLANES.L = Math.max(PLANES.L, Math.ceil(-Math.min(...xs) + 2), Math.ceil(Math.max(...ys) + 2), Math.ceil(Math.max(...zs) + 2));
+  return { W: PLANES.L, D: PLANES.L, H: PLANES.L };
 }
 let lastSize = '';
 
@@ -396,14 +396,10 @@ function render() {
     text3([D + 1, 0, -D - 1.6], 'Foglio da disegno', TH.accent, fs * 0.8, 'right'); // sotto il foglio, così non copre il bordo
     G.restore();
   }
-  // i tre piani, con un leggero quadrettato da 1 cm
+  // i tre piani, lisci come sul foglio da disegno
   const planes = [['PV', [-W, 0, 0, H], 'rgba(255,255,255,.88)'], ['PO', [-W, 0, 0, D], 'rgba(250,252,251,.88)'], ['PL', [0, D, 0, H], 'rgba(246,249,248,.88)']];
   for (const [n, [u0, u1, v0, v1], fill] of planes) {
     poly3([[u0, v0], [u1, v0], [u1, v1], [u0, v1]].map(([u, v]) => P(n, u, v)), fill, rgba(TH.accent, .55), 1.4);
-    G.save(); G.globalAlpha = .35;
-    for (let u = Math.ceil(u0); u <= u1; u++) line3(P(n, u, v0), P(n, u, v1), 1, '#a9bfcb');
-    for (let v = Math.ceil(v0); v <= v1; v++) line3(P(n, u0, v), P(n, u1, v), 1, '#a9bfcb');
-    G.restore();
   }
   // il movimento dei piani: archi con la freccia
   if (S.open > 0.5 && S.open < 89.5) {
