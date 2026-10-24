@@ -324,13 +324,18 @@ function rebuild() {
 }
 let VCACHE = {};
 function seen(name) { return VCACHE[name] || (VCACHE[name] = edgesSeen(CUT, VIEWS[name].t)); }
-// piani di misura fissa, come un foglio vero: PV, PO e PL sono quadrati uguali, così aperti formano quattro quadranti uguali;
-// cambiando le misure dei solidi non si muovono, si allargano (di centimetri interi) solo se un solido non ci sta più e non tornano mai più piccoli
-const PLANES = { L: 12 };
+// il foglio da disegno è quello di Tavola viva: 33 × 24 cm orizzontale, squadratura a 1 cm.
+// Aperti, i piani riempiono i quattro quadranti uguali dentro la squadratura (15,5 × 11 cm):
+// PV e PO larghi W, PL largo DL = W; PO profondo D e piani alti H, con D = H.
+// Cambiando le misure dei solidi non si muovono; se un solido non ci sta più, il foglio si allarga
+// mantenendo le proporzioni, e non torna mai più piccolo.
+const SHEET = { w: 33, h: 24, m: 1 }; let SHK = 1;
 function scene() {
   const xs = MESH.flatMap(m => m.V.map(p => p[0])), ys = MESH.flatMap(m => m.V.map(p => p[1])), zs = MESH.flatMap(m => m.V.map(p => p[2]));
-  PLANES.L = Math.max(PLANES.L, Math.ceil(-Math.min(...xs) + 2), Math.ceil(Math.max(...ys) + 2), Math.ceil(Math.max(...zs) + 2));
-  return { W: PLANES.L, D: PLANES.L, H: PLANES.L };
+  const W0 = SHEET.w / 2 - SHEET.m, H0 = SHEET.h / 2 - SHEET.m;
+  SHK = Math.max(SHK, (-Math.min(...xs) + 1) / W0, (Math.max(...ys) + 1) / H0, (Math.max(...zs) + 1) / H0);
+  const k = Math.ceil(SHK * 4) / 4, W = W0 * k, H = H0 * k;
+  return { W, D: H, H, DL: W, M: SHEET.m * k };
 }
 let lastSize = '';
 
@@ -346,8 +351,8 @@ function basis() {
 let B = basis();
 function proj(p) { const s = fitS * CAM.zoom; return [CW / 2 + CAM.px + s * (dot3(p, B.r) - SC.cx), CH / 2 + CAM.py - s * (dot3(p, B.up) - SC.cy)]; }
 function fit() { // il triedro, chiuso e aperto (e il foglio), deve stare tutto nello schermo
-  const { W, D, H } = scene(), pts = [];
-  for (const phi of [0, Math.PI / 2]) for (const [n, u, v] of [['PV', -W - 1, 0], ['PV', -W - 1, H + 1], ['PV', 0, H + 1], ['PO', -W - 1, D + 2.2], ['PO', 0, D + 2.2], ['PL', D + 1, 0], ['PL', D + 1, H + 1], ['PV', 0, 0]]) pts.push(planeTo3(n, u, v, phi));
+  const { W, D, H, DL, M } = scene(), pts = [];
+  for (const phi of [0, Math.PI / 2]) for (const [n, u, v] of [['PV', -W - M, 0], ['PV', -W - M, H + M], ['PV', 0, H + M], ['PO', -W - M, D + M + 1.2], ['PO', 0, D + M + 1.2], ['PL', DL + M, 0], ['PL', DL + M, H + M], ['PV', 0, 0]]) pts.push(planeTo3(n, u, v, phi));
   const xs = pts.map(p => dot3(p, B.r)), ys = pts.map(p => dot3(p, B.up));
   const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
   SC = { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 }; fitS = Math.min((CW - 40) / (x1 - x0), (CH - 40) / (y1 - y0));
@@ -386,25 +391,25 @@ function planeQuad(W, D, H) { // il piano secante dentro il triedro
 
 function render() {
   G.setTransform(DPR, 0, 0, DPR, 0, 0); G.clearRect(0, 0, CW, CH);
-  const phi = S.open * DEG, { W, D, H } = scene(), s = fitS * CAM.zoom, lw = Math.max(1.6, s * 0.06), thin = Math.max(1, s * 0.03), fs = clamp(s * 0.55, 13, 24);
+  const phi = S.open * DEG, { W, D, H, DL, M } = scene(), s = fitS * CAM.zoom, lw = Math.max(1.6, s * 0.06), thin = Math.max(1, s * 0.03), fs = clamp(s * 0.55, 13, 24);
   const P = (n, u, v) => planeTo3(n, u, v, phi), opened = S.open >= 89.5, ko = clamp((S.open - 35) / 50, 0, 1);
   // il foglio da disegno: compare mentre i piani si aprono, perché è lì che finiscono le tre viste
   if (S.sheet && ko > 0) {
-    G.save(); G.globalAlpha = ko; const F = [[-W - 1, -D - 1], [D + 1, -D - 1], [D + 1, H + 1], [-W - 1, H + 1]];
+    G.save(); G.globalAlpha = ko; const F = [[-W - M, -D - M], [DL + M, -D - M], [DL + M, H + M], [-W - M, H + M]]; // 33 × 24 cm
     poly3(F.map(([u, v]) => [u, 0, v]), '#ffffff', '#1c2126', 2);
-    poly3([[-W - 0.5, -D - 0.5], [D + 0.5, -D - 0.5], [D + 0.5, H + 0.5], [-W - 0.5, H + 0.5]].map(([u, v]) => [u, 0, v]), null, '#1c2126', 1.2); // squadratura
-    text3([D + 1, 0, -D - 1.6], 'Foglio da disegno', TH.accent, fs * 0.8, 'right'); // sotto il foglio, così non copre il bordo
+    poly3([[-W, -D], [DL, -D], [DL, H], [-W, H]].map(([u, v]) => [u, 0, v]), null, '#1c2126', 1.2); // squadratura a 1 cm: i quadranti la riempiono
+    text3([DL + M, 0, -D - M - 0.6], 'Foglio da disegno 33 × 24 cm', TH.accent, fs * 0.8, 'right'); // sotto il foglio, così non copre il bordo
     G.restore();
   }
   // i tre piani, lisci come sul foglio da disegno
-  const planes = [['PV', [-W, 0, 0, H], 'rgba(255,255,255,.88)'], ['PO', [-W, 0, 0, D], 'rgba(250,252,251,.88)'], ['PL', [0, D, 0, H], 'rgba(246,249,248,.88)']];
+  const planes = [['PV', [-W, 0, 0, H], 'rgba(255,255,255,.88)'], ['PO', [-W, 0, 0, D], 'rgba(250,252,251,.88)'], ['PL', [0, DL, 0, H], 'rgba(246,249,248,.88)']];
   for (const [n, [u0, u1, v0, v1], fill] of planes) {
     poly3([[u0, v0], [u1, v0], [u1, v1], [u0, v1]].map(([u, v]) => P(n, u, v)), fill, rgba(TH.accent, .55), 1.4);
   }
   // il movimento dei piani: archi con la freccia
   if (S.open > 0.5 && S.open < 89.5) {
     G.save(); G.globalAlpha = .9; const arcPO = [], arcPL = [];
-    for (let k = 0; k <= 30; k++) { const a = k / 30 * Math.PI / 2; arcPO.push([-W, D * Math.cos(a), -D * Math.sin(a)]); arcPL.push([D * Math.sin(a), D * Math.cos(a), H]); }
+    for (let k = 0; k <= 30; k++) { const a = k / 30 * Math.PI / 2; arcPO.push([-W, D * Math.cos(a), -D * Math.sin(a)]); arcPL.push([DL * Math.sin(a), DL * Math.cos(a), H]); }
     for (const arc of [arcPO, arcPL]) { for (let k = 1; k < arc.length; k++) line3(arc[k - 1], arc[k], 2, TH.accent, [7, 5]); arrowHead(arc[arc.length - 2], arc[arc.length - 1], TH.accent, 12); }
     G.restore();
   }
@@ -464,7 +469,7 @@ function render() {
   // vera forma della sezione inclinata: riquadro a parte
   if (PLANE && PLANE.name === 'inclinato') drawTrueShape();
   if (S.labels) {
-    text3(P('PV', -W + 0.9, H - 0.7), 'PV', TH.accent, fs); text3(P('PO', -W + 0.9, D - 0.7), 'PO', TH.accent, fs); text3(P('PL', D - 0.9, H - 0.7), 'PL', TH.accent, fs);
+    text3(P('PV', -W + 0.9, H - 0.7), 'PV', TH.accent, fs); text3(P('PO', -W + 0.9, D - 0.7), 'PO', TH.accent, fs); text3(P('PL', DL - 0.9, H - 0.7), 'PL', TH.accent, fs);
     text3([-W - 0.2, 0, 0], 'LT', INK, fs * 0.85, 'right');
   }
   if (DRAG) dragLabel();
