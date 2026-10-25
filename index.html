@@ -2001,7 +2001,7 @@ function guideHTML() {
   const sub = 'Tavola viva: segnalazione', body = 'Cosa stavo facendo:\n\nCosa è successo:\n\nDove (LIM o computer, browser):\n\n';
   return `<div class="note report"><b>Qualcosa non funziona o hai un’idea?</b> Scrivi a <b>${REPORT_MAIL}</b>: ogni segnalazione aiuta a migliorare Tavola viva.
     <div class="wrap"><a class="btn primary" href="https://mail.google.com/mail/?view=cm&fs=1&to=${REPORT_MAIL}&su=${encodeURIComponent(sub)}&body=${encodeURIComponent(body)}" target="_blank" rel="noopener">Scrivi con Gmail</a><a class="btn" href="mailto:${REPORT_MAIL}?subject=${encodeURIComponent(sub)}&body=${encodeURIComponent(body)}">Altra posta</a><button class="btn" data-a="copymail">Copia indirizzo</button></div></div>
-  <div class="guide"><div class="intro">Tocca una voce per leggere come si usa. Su ogni strumento, la barra a destra ricorda anche il passo successivo.</div>${GUIDA.map(([t, li]) => `<details><summary>${t}</summary><ul>${li.map(x => `<li>${x}</li>`).join('')}</ul></details>`).join('')}</div>`;
+  <div class="guide"><div class="intro">Tocca una voce per leggere come si usa. Su ogni strumento, la barra a destra ricorda anche il passo successivo.</div>${GUIDA.map(([t, li]) => `<details><summary>${t}</summary><ul>${li.map(x => `<li>${x}</li>`).join('')}</ul></details>`).join('')}<p class="intro" style="margin-top:14px"><a href="privacy.html" target="_blank" rel="noopener">Norme sulla privacy</a></p></div>`;
 }
 // benvenuto alla prima apertura
 function showWelcome() {
