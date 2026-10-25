@@ -165,6 +165,7 @@ details.more{background:#fff;border:1px solid var(--line);border-radius:12px;pad
 @media (max-width:1500px){.brand b{display:none}}
 @media (max-width:1420px){#top .tl{display:none}}
 @media (max-height:860px){#palette{gap:2px}.pal{min-height:44px;font-size:11.5px}.pal svg{width:22px;height:22px}.pal-h{padding:3px 4px 0;font-size:10px}}
+@media (max-height:740px){.pal{min-height:40px;padding:2px}.pal svg{width:20px;height:20px}}
 @media (max-width:1180px){.hide-l{display:none}#top .show-l{display:block}#top .btn{padding:0 9px}}
 @media (max-width:640px){#app{grid-template-columns:76px 1fr}.pal{font-size:11px}.pal svg{width:26px;height:26px}.brand small,.hide-s{display:none}}
 </style>
@@ -220,6 +221,7 @@ details.more{background:#fff;border:1px solid var(--line);border-radius:12px;pad
     <div class="pal-h">Azioni</div>
     <button class="pal" data-mode="sposta"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4v24M4 16h24M12 8l4-4 4 4M12 24l4 4 4-4M8 12l-4 4 4 4M24 12l4 4-4 4"/></svg>Sposta</button>
     <button class="pal" data-mode="segmento"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 25 26 7"/><circle cx="6" cy="25" r="2.4" fill="currentColor"/><circle cx="26" cy="7" r="2.4" fill="currentColor"/></svg>Segmento</button>
+    <button class="pal" data-mode="quota"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M5 24V12M27 24V12M3 18h26"/><path d="M3.5 20.5l3-5M25.5 20.5l3-5" stroke-width="2.2"/><path d="M13 13.5h6" stroke-width="1.4"/><path d="M14 10.5h4" stroke-width="1.4"/></svg>Quota</button>
     <button class="pal" data-mode="punto"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="16" cy="16" r="4" fill="currentColor"/><path d="M16 5v4M16 23v4M5 16h4M23 16h4" stroke-linecap="round"/></svg>Punto</button>
     <button class="pal" data-mode="matita"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 26l2-7L22 5l5 5-14 14z"/><path d="m19 8 5 5M6 26l7-2"/></svg>Matita</button>
     <button class="pal" data-mode="colore"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 15 15 6l10 10-9 9z" fill="currentColor" fill-opacity=".25"/><path d="M15 6 12 3M25 16c1.5 2.5 3 4.5 3 6a3 3 0 0 1-6 0c0-1.5 1.5-3.5 3-6z"/></svg>Colore</button>
@@ -601,6 +603,7 @@ function strokeBox(s) {
   if (s.type === 'module') return [s.x, s.y, s.x + s.w, s.y + s.h];
   if (s.type === 'mark') return [s.x - s.size, s.y - s.size, s.x + s.size, s.y + s.size];
   if (s.type === 'dot') return [s.x - 0.2, s.y - 0.2, s.x + 0.2, s.y + 0.2];
+  if (s.type === 'dim') { const g = dimGeom(s); return boxOf([g.P1, g.P2, ...g.E.flat(), add(g.tp, mul(g.up, 0.4))]); }
   return [0, 0, 0, 0];
 }
 function boxOf(pts) { let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity; for (const p of pts) { a = Math.min(a, p.x); b = Math.min(b, p.y); c = Math.max(c, p.x); d = Math.max(d, p.y); } return [a, b, c, d]; }
@@ -613,6 +616,7 @@ function strokeDist(s, p) {
   if (s.type === 'mark') return Math.max(0, Math.hypot(p.x - s.x, p.y - s.y) - s.size);
   if (s.type === 'dot') return Math.max(0, Math.hypot(p.x - s.x, p.y - s.y) - 0.15);
   if (s.type === 'text' || s.type === 'module') { const b = strokeBox(s); return (p.x >= b[0] && p.x <= b[2] && p.y >= b[1] && p.y <= b[3]) ? 0 : Infinity; }
+  if (s.type === 'dim') { const g = dimGeom(s); return Math.min(distSeg(p, g.P1, g.P2), dist(p, g.tp) - 0.25, ...g.E.map(([a, b]) => distSeg(p, a, b))); }
   return Infinity;
 }
 function hitStroke(p, px, filter) {
@@ -711,8 +715,31 @@ function paintSheet(data, o) {
   for (const s of data.strokes) if (s.type !== 'fill' && s.type !== 'brush') paintStroke(s);
   G.restore();
 }
+/* quota: due punti misurati (x1,y1 → x2,y2), un punto (cx,cy) che dice dove sta la linea di misura, e la direzione:
+   'a' allineata ai due punti, 'h' orizzontale, 'v' verticale. Misura in cm, trattini obliqui alle estremità. */
+function dimGeom(s) {
+  const A = { x: s.x1, y: s.y1 }, B = { x: s.x2, y: s.y2 }, C = { x: s.cx, y: s.cy };
+  let u = s.dir === 'h' ? { x: 1, y: 0 } : s.dir === 'v' ? { x: 0, y: 1 } : unit(sub(B, A));
+  if (!isFinite(u.x)) u = { x: 1, y: 0 };
+  const n = { x: -u.y, y: u.x }, P1 = add(A, mul(n, dot(sub(C, A), n))), P2 = add(B, mul(n, dot(sub(C, B), n)));
+  const val = Math.abs(dot(sub(B, A), u)), d = dist(P1, P2) > 1e-6 ? unit(sub(P2, P1)) : u;
+  const ext = (X, P) => { const l = dist(X, P); if (l < 0.15) return null; const e = mul(sub(P, X), 1 / l); return [add(X, mul(e, 0.1)), add(P, mul(e, 0.2))]; }; // stacco di 1 mm dal disegno, 2 mm oltre la linea di misura
+  let ang = Math.atan2(d.y, d.x); if (ang > Math.PI / 2 - 1e-6) ang -= Math.PI; if (ang < -Math.PI / 2 - 1e-6) ang += Math.PI; // scritta leggibile da sotto o da destra, come vuole la norma
+  const up = { x: Math.sin(ang), y: -Math.cos(ang) }, mid = mul(add(P1, P2), 0.5);
+  return { P1, P2, d, val, E: [ext(A, P1), ext(B, P2)].filter(Boolean), ang, tp: add(mid, mul(up, 0.08)), mid, up };
+}
+const DIM_EM = 0.35 / 0.716; // cifre alte 3,5 mm
+function paintDim(s) {
+  const g = dimGeom(s); setW(); penStyle('2H', false); G.beginPath();
+  for (const [a, b] of g.E) { G.moveTo(a.x, a.y); G.lineTo(b.x, b.y); }
+  const a = sub(g.P1, mul(g.d, 0.2)), b = add(g.P2, mul(g.d, 0.2)); G.moveTo(a.x, a.y); G.lineTo(b.x, b.y); G.stroke();
+  penStyle('HB', false); const t = mul(add(g.d, { x: -g.d.y, y: g.d.x }), 0.12 / Math.SQRT2); G.beginPath(); // trattini obliqui a 45°
+  for (const P of [g.P1, g.P2]) { G.moveTo(P.x - t.x, P.y - t.y); G.lineTo(P.x + t.x, P.y + t.y); } G.stroke();
+  drawTxt(fmt(g.val), g.tp, DIM_EM, PENS.HB.col, 'center', g.ang, { minPx: 0 });
+}
 function paintStroke(s) {
   setW();
+  if (s.type === 'dim') { paintDim(s); return; }
   if (s.type === 'fill') { G.save(); G.globalAlpha = s.alpha; G.imageSmoothingEnabled = true; G.drawImage(fillCanvas(s), s.x, s.y, s.w, s.h); G.restore(); return; }
   if (s.type === 'brush') { G.save(); G.globalAlpha = s.alpha; brushPath(s.pts, s.w, s.color); G.restore(); return; }
   if (s.type === 'text') { drawTxt(s.text, { x: s.x, y: s.y }, s.size, PENS.HB.col, 'left', 0, { bold: s.bold }); return; }
@@ -860,12 +887,14 @@ function paintOverlay() {
   if (U.hoverEdge && !(gst && gst.type !== 'edge')) hiEdge(U.hoverEdge, HI);
   if (gst && gst.snapEdges) { hiEdge(gst.snapEdges[0], SNAPC); hiEdge(gst.snapEdges[1], SNAPC); }
   if (gst && gst.refLine) hiEdge(gst.refLine, SNAPC); // segmento di riferimento per parallele e perpendicolari
+  if (U.dimPend && !(gst && gst.prev && gst.prev.kind === 'dim')) { G.save(); G.globalAlpha = 0.55; paintDim(dimFrom(U.dimPend.A, U.dimPend.B)); G.restore(); dotAt(U.dimPend.A, ACC); dotAt(U.dimPend.B, ACC); }
   if (!gst) return;
   if (gst.guides) for (const gd of gst.guides) { // linee guida di allineamento, come in Canva
     const a = toScr(gd.a), b = toScr(gd.b); setS(); G.save(); G.strokeStyle = GUIDE; G.lineWidth = 1.6; G.setLineDash([7, 5]);
     G.beginPath(); G.moveTo(a.x, a.y); G.lineTo(b.x, b.y); G.stroke(); G.restore();
   }
   const pv = gst.prev;
+  if (pv && pv.kind === 'dim') { paintDim(pv.s); dotAt({ x: pv.s.x1, y: pv.s.y1 }, ACC); dotAt({ x: pv.s.x2, y: pv.s.y2 }, ACC); }
   if (pv && pv.kind === 'line') {
     setW(); penStyle(U.pen, U.dash); if (pv.err) { G.strokeStyle = '#c0392b'; G.setLineDash([0.2, 0.15]); }
     G.beginPath(); G.moveTo(pv.A.x, pv.A.y); G.lineTo(pv.B.x, pv.B.y); G.stroke(); G.setLineDash([]);
@@ -1008,6 +1037,7 @@ function onDown(p, e) {
   if (lt) { select(lt); toast('Strumento bloccato: per spostarlo tocca “Sblocca”. Puoi disegnare lungo i suoi bordi.'); return; }
   if (U.mode === 'segmento') { const tg = stopTargets(), q = placeSnap(p, tg); return G0('seg', null, { a: q || p, snapPt: q, tg }); }
   if (U.mode === 'punto') { placePoint(p); return; }
+  if (U.mode === 'quota') { if (U.dimPend) return G0('dimoff', null, { prev: { kind: 'dim', s: dimOf(p) } }); const tg = stopTargets(), q = placeSnap(p, tg); return G0('dimab', null, { a: q || p, snapPt: q, tg }); }
   if (U.mode === 'matita') { const tg = stopTargets(), q = placeSnap(p, tg) || p; return G0('free', null, { pts: [[r3(q.x), r3(q.y)]], tg, start: q, snapPt: q !== p ? q : null }); }
   // modalità Sposta: intestazione o deselezione
   // modalità Sposta: toccare un segno lo seleziona; se è sbloccato si trascina
@@ -1131,6 +1161,11 @@ function onMove(p) {
       }
       break;
     }
+    case 'dimab': {
+      const B = placeSnap(p, g.tg) || p; g.snapPt = placeSnap(p, g.tg); g.label = null;
+      g.prev = dist(g.a, B) * V.s < 5 ? null : { kind: 'dim', s: dimFrom(g.a, B) }; break;
+    }
+    case 'dimoff': g.prev = { kind: 'dim', s: dimOf(p) }; break;
     case 'seg': {
       const a = g.a, v = sub(p, a); g.label = null; g.refLine = null; if (len(v) * V.s < 5) { g.prev = null; break; }
       const gd = segGuide(a, v); let dir = gd ? gd.d : unit(v);
@@ -1207,6 +1242,8 @@ function onUp(p) {
       else if (g.type === 'edge' && !g.moved) toast('Trascina lungo il bordo evidenziato per tracciare.');
       break;
     }
+    case 'dimab': if (g.prev) { U.dimPend = { A: g.a, B: { x: g.prev.s.x2, y: g.prev.s.y2 } }; renderCtx(); } else if (!g.moved) toast('Trascina dal primo al secondo punto da quotare.'); break;
+    case 'dimoff': { const q = dimOf(p); U.dimPend = null; pushUndo(); addStroke(q); changed(); renderCtx(); break; }
     case 'brush': pushUndo(); addStroke({ type: 'brush', pts: g.pts, w: U.col.bw, color: U.col.color, alpha: U.col.alpha }); changed(); break;
     case 'free':
       if (!g.stopped && g.pts.length >= 2) { const l = g.pts[g.pts.length - 1], q = placeSnap({ x: l[0], y: l[1] }, g.tg); if (q) g.pts[g.pts.length - 1] = [r3(q.x), r3(q.y)]; }
@@ -1224,6 +1261,14 @@ function onUp(p) {
   }
   U.hoverEdge = null; draw();
 }
+// la quota nasce staccata di 1 cm dal disegno, dalla parte in alto o a sinistra; poi la si mette dove si tocca
+function dimFrom(A, B) {
+  const s = { type: 'dim', x1: r3(A.x), y1: r3(A.y), x2: r3(B.x), y2: r3(B.y), dir: U.dimDir || 'a', pen: '2H' };
+  const u = s.dir === 'h' ? { x: 1, y: 0 } : s.dir === 'v' ? { x: 0, y: 1 } : unit(sub(B, A)); let n = { x: -u.y, y: u.x }; if (n.y > 1e-6 || (Math.abs(n.y) < 1e-6 && n.x > 0)) n = mul(n, -1);
+  const far = s.dir === 'h' ? { x: A.x, y: Math.min(A.y, B.y) } : s.dir === 'v' ? { x: Math.min(A.x, B.x), y: A.y } : A, C = add(far, mul(n, 1));
+  s.cx = r3(C.x); s.cy = r3(C.y); return s;
+}
+function dimOf(p) { const s = dimFrom(U.dimPend.A, U.dimPend.B), q = D.sheet.gridSnap && D.sheet.grid ? gridSnap(p) : p; s.cx = r3(q.x); s.cy = r3(q.y); return s; }
 function eraseAt(p) {
   const i = hitStroke(p, 12);
   if (i >= 0) { ensureUndo(); D.strokes.splice(i, 1); snapCache = null; draw(); }
@@ -1456,7 +1501,7 @@ function hover(p) {
 /* ================= spostare i segni disegnati ================= */
 // I segni sono bloccati finché non si preme “Sblocca”; restano sbloccati finché non si preme “Blocca”.
 // Trascinandoli, i loro punti si agganciano agli altri punti notevoli o si allineano in orizzontale/verticale.
-const STROKENAME = { fill: 'Zona colorata', brush: 'Pastello', line: 'Segmento', free: 'Tratto a mano', text: 'Scritta', module: 'Modulo', mark: 'Centro', dot: 'Punto' };
+const STROKENAME = { fill: 'Zona colorata', brush: 'Pastello', line: 'Segmento', free: 'Tratto a mano', text: 'Scritta', module: 'Modulo', mark: 'Centro', dot: 'Punto', dim: 'Quota' };
 const strokeName = s => s.type === 'arc' ? (Math.abs(s.sw) >= TAU - 1e-6 ? 'Circonferenza' : 'Arco') : STROKENAME[s.type] || 'Segno';
 const selStrokes = () => U.selS.map(id => D.strokes.find(s => s.id === id)).filter(Boolean);
 function keyPts(s) {
@@ -1464,11 +1509,13 @@ function keyPts(s) {
   if (s.type === 'arc') { const c = { x: s.cx, y: s.cy }; return Math.abs(s.sw) >= TAU - 1e-6 ? [c, { x: c.x + s.r, y: c.y }, { x: c.x - s.r, y: c.y }, { x: c.x, y: c.y + s.r }, { x: c.x, y: c.y - s.r }] : [c, arcPt(s, s.a0), arcPt(s, s.a0 + s.sw)]; }
   if (s.type === 'free' || s.type === 'brush') { const a = s.pts[0], b = s.pts[s.pts.length - 1]; return [{ x: a[0], y: a[1] }, { x: b[0], y: b[1] }]; }
   if (s.type === 'module') return [{ x: s.x, y: s.y }, { x: s.x + s.w, y: s.y }, { x: s.x, y: s.y + s.h }, { x: s.x + s.w, y: s.y + s.h }];
+  if (s.type === 'dim') return [{ x: s.x1, y: s.y1 }, { x: s.x2, y: s.y2 }];
   return [{ x: s.x, y: s.y }];
 }
 function shiftStroke(s, o, d) {
   if (s.type === 'line') { s.x1 = r3(o.x1 + d.x); s.y1 = r3(o.y1 + d.y); s.x2 = r3(o.x2 + d.x); s.y2 = r3(o.y2 + d.y); }
   else if (s.type === 'arc') { s.cx = r3(o.cx + d.x); s.cy = r3(o.cy + d.y); }
+  else if (s.type === 'dim') { s.x1 = r3(o.x1 + d.x); s.y1 = r3(o.y1 + d.y); s.x2 = r3(o.x2 + d.x); s.y2 = r3(o.y2 + d.y); s.cx = r3(o.cx + d.x); s.cy = r3(o.cy + d.y); }
   else if (s.type === 'free' || s.type === 'brush') s.pts = o.pts.map(q => [r3(q[0] + d.x), r3(q[1] + d.y)]);
   else { s.x = r3(o.x + d.x); s.y = r3(o.y + d.y); }
 }
@@ -1751,7 +1798,7 @@ document.addEventListener('keydown', e => {
   if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? doRedo() : doUndo(); return; }
   if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); doRedo(); return; }
   if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); saveBoard(); return; }
-  if (e.key === 'Escape') { if (!$('#drawer').hidden) closeDrawer(); else select(null); }
+  if (e.key === 'Escape') { if (!$('#drawer').hidden) closeDrawer(); else if (U.dimPend) { U.dimPend = null; renderCtx(); draw(); } else select(null); }
   if ((e.key === 'Delete' || e.key === 'Backspace') && selTool() && U.view < 0) { removeTool(selTool()); e.preventDefault(); }
 });
 
@@ -1781,7 +1828,7 @@ $('#pen2H').onclick = () => { U.pen = '2H'; renderTop(); draw(); };
 $('#penHB').onclick = () => { U.pen = 'HB'; renderTop(); draw(); };
 $('#dashBtn').onclick = () => { U.dash = !U.dash; renderTop(); };
 $('#undoBtn').onclick = doUndo; $('#redoBtn').onclick = doRedo;
-document.querySelectorAll('.pal[data-mode]').forEach(b => b.onclick = () => { if (U.view >= 0) return toast('Premi “Riprendi disegno” per tornare a disegnare.'); U.mode = b.dataset.mode; U.selS = []; U.cg = null; U.addSel = false; if (['gomma', 'lettere', 'colore', 'punto'].includes(U.mode)) U.sel = null; renderTop(); renderCtx(); draw(); });
+document.querySelectorAll('.pal[data-mode]').forEach(b => b.onclick = () => { if (U.view >= 0) return toast('Premi “Riprendi disegno” per tornare a disegnare.'); U.mode = b.dataset.mode; U.dimPend = null; U.selS = []; U.cg = null; U.addSel = false; if (['gomma', 'lettere', 'colore', 'punto'].includes(U.mode)) U.sel = null; renderTop(); renderCtx(); draw(); });
 // ogni strumento ricompare dove e come è stato usato l'ultima volta (posizione, rotazione, apertura del compasso)
 const TOOLKEYS = { compasso: ['x', 'y', 'ang', 'r', 's'], other: ['x', 'y', 'rot', 'len'] };
 function rememberTools() {
@@ -1843,6 +1890,11 @@ function renderCtx() {
       <button class="chip ${ph === 'center' ? 'on' : ''}" data-a="repoint">Punta altrove</button><button class="chip ${ph === 'open' ? 'on' : ''}" data-a="reopen">Cambia apertura</button><button class="chip" data-a="center"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Segna il centro</button>`;
   } else if (t) {
     h = `<div class="ttl">${TOOLNAME[t.kind]}</div>${lenControls()}<span class="hint">Appoggia due o tre dita per spostarlo e ruotarlo.</span>${snapControls()}<div class="lbl">Aggancio</div><button class="chip ${D.sheet.magnet ? 'on' : ''}" data-a="magnet">${D.sheet.magnet ? 'Attivo' : 'Spento'}</button>`;
+  } else if (U.mode === 'quota') {
+    const dd = U.dimDir || 'a', c = (v, l) => `<button class="btn ${dd === v ? 'on' : ''}" data-a="dimdir" data-v="${v}">${l}</button>`;
+    h = `<div class="ttl">Quota</div><span class="hint" style="font-weight:700;color:var(--accent)">${U.dimPend ? '2 · Tocca dove mettere la linea di misura' : '1 · Trascina dal primo al secondo punto'}</span>
+      <div class="lbl">Direzione</div><div class="seg">${c('a', 'Allineata')}${c('h', 'Orizzontale')}${c('v', 'Verticale')}</div>
+      ${U.dimPend ? '<button class="chip" data-a="dimcancel">Annulla</button>' : ''}<span class="hint">Misura in cm.</span>${snapControls()}`;
   } else if (U.mode === 'segmento') {
     h = `<div class="ttl">Segmento</div>${lenControls()}<div class="lbl">Angolo</div><button class="chip ${U.angGuide ? 'on' : ''}" data-a="angg">${U.angGuide ? 'Guidato' : 'Libero'}</button><span class="hint">${U.angGuide ? 'Multipli di 15°, parallelo ∥ o perpendicolare ⊥.' : 'Qualsiasi inclinazione.'}</span>${snapControls()}`;
   } else if (U.mode === 'matita') {
@@ -1883,6 +1935,8 @@ $('#ctxbar').addEventListener('click', e => {
   else if (a === 'selall') { U.selS = D.strokes.map(x => x.id); renderCtx(); draw(); }
   else if (a === 'selnone') { U.selS = []; U.addSel = false; renderCtx(); draw(); }
   else if (a === 'libera') { U.lenMode = 'libera'; renderCtx(); }
+  else if (a === 'dimdir') { U.dimDir = b.dataset.v; renderCtx(); draw(); }
+  else if (a === 'dimcancel') { U.dimPend = null; renderCtx(); draw(); }
   else if (a === 'precisa') { U.lenMode = 'precisa'; renderCtx(); }
   else if (a === 'lenbox') openNum({ title: 'Lunghezza del segmento (cm)', value: U.lenVal, min: 0.1, max: 100, onOk: v => { U.lenVal = v; U.lenMode = 'precisa'; renderCtx(); toast('Lunghezza precisa: ' + fmt(v) + ' cm. Parti dal punto iniziale e trascina nella direzione voluta.'); } });
   else if (a === 'radbox' && t) openNum({ title: 'Apertura del compasso (cm)', value: t.r, min: 0.2, max: 60, onOk: v => { pushUndo(); setRadius(t, v); changed(); } });
@@ -1958,6 +2012,10 @@ const GUIDA = [
     'Con <b>Angolo: Guidato</b> il segmento si blocca su orizzontale, verticale, 45°, 30°, 60° (multipli di 15°) e diventa <b>parallelo ∥</b> o <b>perpendicolare ⊥</b> ai segmenti già disegnati: è come avere le squadre invisibili. Con <b>Libero</b> va in qualsiasi direzione.',
     'Con lunghezza <b>Precisa</b> il segmento misura esattamente i cm scritti, nella direzione in cui trascini.',
     'Interruttori a destra: <b>Quadretti</b> (aggancio agli incroci) e <b>Linee</b> (si ferma sulle linee già disegnate).']],
+  ['Quota', [
+    'Tocca <b>Quota</b> a sinistra. <b>1</b> · trascina dal primo al secondo punto da misurare: si aggancia a estremi, incroci e centri. <b>2</b> · tocca (o trascina) dove vuoi la linea di misura.',
+    'La misura è in <b>cm</b>, scritta sopra la linea; alle estremità ci sono i <b>trattini obliqui</b>. Le linee sono sottili (2H).',
+    'Nella barra a destra: <b>Allineata</b> (parallela ai due punti), <b>Orizzontale</b> o <b>Verticale</b>. Si sposta e si cancella come gli altri segni.']],
   ['Punto', [
     'Tocca dove vuoi il punto: si aggancia a incroci, linee e quadretti. Toccando vicino al centro di un segmento, il punto va <b>esattamente a metà</b>.',
     'A destra scegli <b>pallino</b> o <b>croce</b> e, se vuoi, la <b>lettera</b> automatica (A, B, C…).']],
