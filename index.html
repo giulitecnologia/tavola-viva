@@ -2178,7 +2178,7 @@ function openText_(txt, h) {
 }
 /* ---------- Google Drive: ognuno salva nel proprio Drive, nella cartella «Tavola viva» ----------
    Permesso drive.file: l'app vede e modifica solo i file che ha creato lei. Nessun server: tutto avviene nel browser. */
-const GDRIVE_CLIENT_ID = ''; // ID client OAuth del progetto Google Cloud «Tavola viva» (vuoto = Drive nascosto)
+const GDRIVE_CLIENT_ID = '70316158627-hhilqjep07l70gf2i4vn1tap501tktnf.apps.googleusercontent.com'; // ID client OAuth del progetto Google Cloud «Tavola viva» (vuoto = Drive nascosto)
 const GAPI = 'https://www.googleapis.com/drive/v3', GUP = 'https://www.googleapis.com/upload/drive/v3', GFOLDER = 'Tavola viva';
 let DRIVEF = null, DRIVEF_PREV = null, DRIVE_LIST = null, gTok = null, gTokExp = 0, gClient = null, gWaiting = null, gFolder = null;
 function gisLoad() { // la libreria di Google si carica solo quando serve (aprendo il pannello Tavole)
