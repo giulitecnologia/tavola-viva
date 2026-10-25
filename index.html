@@ -1924,7 +1924,7 @@ $('#delStep').onclick = () => confirmBox('Eliminare il passaggio ' + (U.view + 1
 
 /* ================= pannelli laterali ================= */
 let drawerKind = null;
-function openDrawer(kind) { if (U.view >= 0 && kind === 'foglio') return toast('Premi “Riprendi disegno” prima di cambiare il foglio.'); drawerKind = kind; $('#drawerTitle').textContent = { foglio: 'Foglio', tavole: 'Tavole', guida: 'Guida' }[kind]; renderDrawer(); $('#drawer').hidden = false; $('#backdrop').hidden = false; }
+function openDrawer(kind) { if (U.view >= 0 && kind === 'foglio') return toast('Premi “Riprendi disegno” prima di cambiare il foglio.'); drawerKind = kind; if (kind === 'tavole' && GDRIVE_CLIENT_ID) gisLoad().catch(() => { }); $('#drawerTitle').textContent = { foglio: 'Foglio', tavole: 'Tavole', guida: 'Guida' }[kind]; renderDrawer(); $('#drawer').hidden = false; $('#backdrop').hidden = false; }
 function closeDrawer() { $('#drawer').hidden = true; $('#backdrop').hidden = true; drawerKind = null; }
 $('#sheetBtn').onclick = () => openDrawer('foglio');
 $('#boardsBtn').onclick = () => openDrawer('tavole');
@@ -2039,7 +2039,10 @@ function boardsHTML() {
   const boards = kvGet(LS.boards) || {}, names = Object.keys(boards).sort((a, b) => (boards[b].savedAt || 0) - (boards[a].savedAt || 0));
   return `<div class="row"><span class="k">Tavola aperta</span><div class="wrap"><button class="btn" data-a="rename" style="flex:1;justify-content:flex-start;min-width:0;overflow:hidden">${esc(D.name)}</button><button class="btn primary" data-a="savelocal">Salva</button></div><div class="wrap"><button class="btn" data-a="new">Nuovo foglio bianco</button></div></div>
   <div class="row"><span class="k">Salvate in questo browser</span><div class="list">${names.length ? names.map(n => `<div class="item"><span class="nm">${esc(n)}<br><span class="dt">${new Date(boards[n].savedAt || 0).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })} · ${(boards[n].doc.steps || []).length} passaggi</span></span><button class="btn" data-a="openlocal" data-v="${esc(n)}">Apri</button><button class="btn ghost" data-a="dellocal" data-v="${esc(n)}">Elimina</button></div>`).join('') : '<div class="empty">Nessuna tavola salvata.</div>'}</div></div>
-  <div class="row"><span class="k">Tavola come file, per ritrovarla ovunque (consigliato)</span><div class="wrap"><button class="btn primary" data-a="saveasfile">${FS_OK ? 'Salva come file…' : 'Scarica file della tavola'}</button><button class="btn" data-a="openfile">Riapri un file salvato…</button></div>
+  ${GDRIVE_CLIENT_ID ? `<div class="row"><span class="k">Google Drive</span><div class="wrap"><button class="btn primary" data-a="drivesave">Salva su Drive</button><button class="btn" data-a="driveopen">Apri da Drive</button></div>
+    ${DRIVEF ? `<div class="empty">Collegata a Drive: <b>${esc(DRIVEF.name)}</b>. Ogni volta che premi <b>Salva</b> si aggiorna anche su Drive.</div>` : `<div class="empty">La tavola va nel <b>tuo</b> Drive, nella cartella <b>Tavola viva</b>, con l’account Google che scegli: da qualunque computer la ritrovi con <b>Apri da Drive</b>. Nessun altro la vede.</div>`}
+    ${DRIVE_LIST ? `<div class="list">${DRIVE_LIST.length ? DRIVE_LIST.map(d => `<div class="item"><span class="nm">${esc(d.name.replace(/\.html?$/i, ''))}<br><span class="dt">${new Date(d.modifiedTime).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })}</span></span><button class="btn" data-a="driveget" data-v="${esc(d.id)}">Apri</button></div>`).join('') : '<div class="empty">Nella cartella Tavola viva del tuo Drive non ci sono ancora tavole.</div>'}</div>` : ''}</div>` : ''}
+  <div class="row"><span class="k">Tavola come file, per ritrovarla ovunque${GDRIVE_CLIENT_ID ? '' : ' (consigliato)'}</span><div class="wrap"><button class="btn primary" data-a="saveasfile">${FS_OK ? 'Salva come file…' : 'Scarica file della tavola'}</button><button class="btn" data-a="openfile">Riapri un file salvato…</button></div>
     ${FILEH ? `<div class="empty">Collegata al file <b>${esc(FILEH.name)}</b>: ogni volta che premi <b>Salva</b> si aggiorna anche il file.</div>` : `<div class="empty">${FS_OK ? 'Scegli tu dove metterla (Documenti, una chiavetta…): da lì in poi <b>Salva</b> aggiorna anche quel file.' : 'Il file finisce nella cartella Download.'} Per portarla su Drive, caricalo su drive.google.com come un qualsiasi file.<br><b>Per riaprirla</b> fai doppio clic sul file: vedi il disegno e il pulsante <b>Apri in Tavola viva</b>. Oppure, da qui, <b>Riapri un file salvato…</b></div>`}
     <div class="wrap"><button class="btn" data-a="downloadall">Scarica tutte le tavole</button></div>
     <div class="empty">Un unico file con tutte le tavole e gli esempi di questo browser: con <b>Riapri un file salvato…</b> le ritrovi tutte nell’elenco, in un altro computer o in un altro profilo.</div></div>
@@ -2070,9 +2073,12 @@ $('#drawerBody').addEventListener('click', e => {
     case 'saveprefs': { const p = clone(s); toast(lsSet(LS.prefs, p) ? 'Impostazioni salvate come predefinite' : 'Impossibile salvare nel browser', lsSet(LS.prefs, p) ? '' : 'warn'); break; }
     case 'rename': openText({ title: 'Nome della tavola', value: D.name === 'Tavola senza nome' ? '' : D.name, onOk: x => { if (x.trim()) { D.name = x.trim(); changed(); renderDrawer(); } } }); break;
     case 'savelocal': saveBoard(); renderDrawer(); break;
-    case 'openlocal': { const bd = kvGet(LS.boards) || {}; if (bd[v]) { leaveExample(); FILEH = null; loadDoc(bd[v].doc); D.example = false; changed(); closeDrawer(); toast('Aperta “' + v + '”'); } break; }
+    case 'openlocal': { const bd = kvGet(LS.boards) || {}; if (bd[v]) { leaveExample(); FILEH = null; DRIVEF = null; loadDoc(bd[v].doc); D.example = false; changed(); closeDrawer(); toast('Aperta “' + v + '”'); } break; }
     case 'dellocal': confirmBox('Eliminare “' + v + '” da questo dispositivo?', 'Elimina', () => { const bd = kvGet(LS.boards) || {}; delete bd[v]; kvSet(LS.boards, bd); renderDrawer(); }); break;
     case 'saveasfile': saveAsFile(); break;
+    case 'drivesave': driveSave(); break;
+    case 'driveopen': driveList(); break;
+    case 'driveget': driveOpen(v); break;
     case 'copymail': (navigator.clipboard ? navigator.clipboard.writeText(REPORT_MAIL) : Promise.reject()).then(() => toast('Indirizzo copiato: ' + REPORT_MAIL), () => toast('Indirizzo: ' + REPORT_MAIL, 'long')); break;
     case 'downloadall': downloadAll(); break;
     case 'openfile': openFile(); break;
@@ -2096,9 +2102,10 @@ function saveBoard() {
   for (const k in bd) if (k !== D.name && k.includes(' · ') && JSON.stringify(bd[k].doc.strokes) === same) delete bd[k]; // copie automatiche identiche
   const c = clone(D); delete c.example; delete c.exEdited; bd[D.name] = { savedAt: Date.now(), doc: c };
   const ok = kvSet(LS.boards, bd); if (ok) { if (D.example) D.example = false; renderTop(); }
+  if (DRIVEF) driveSave(true);
   if (FILEH) { const h = FILEH; writeFile(h).then(() => toast('Tavola “' + D.name + '” salvata, anche nel file ' + h.name)).catch(() => toast('Salvata nel browser, ma il file ' + h.name + ' non si è aggiornato: usa “Salva come file…”.', 'warn')); }
-  else if (ok) { toast('Tavola “' + D.name + '” salvata in questo browser' + (fileTipShown ? '' : '. Per ritrovarla anche su altri computer o account: Tavole → Salva come file…'), fileTipShown ? '' : 'long'); fileTipShown = true; }
-  if (ok || FILEH) SAVED = savedKey();
+  else if (ok && !DRIVEF) { toast('Tavola “' + D.name + '” salvata in questo browser' + (fileTipShown ? '' : '. Per ritrovarla anche su altri computer o account: Tavole → Salva come file…'), fileTipShown ? '' : 'long'); fileTipShown = true; }
+  if (ok || FILEH || DRIVEF) SAVED = savedKey();
   if (!ok) toast('Salvataggio non riuscito in questo browser: salvala come file.', 'warn');
 }
 /* ---------- avviso prima di perdere il lavoro ---------- */
@@ -2166,8 +2173,70 @@ function openText_(txt, h) {
   if (o && o.app === 'tavolaviva-archivio') return importAll(o);
   if (!o || o.app !== 'tavolaviva' || !Array.isArray(o.strokes)) { toast('Questo file non è una tavola di Tavola viva.', 'warn'); return; }
   if (!D.example) archive(D); // il foglio che c'era resta al sicuro nell'elenco Tavole
-  leaveExample(); FILEH_PREV = null; loadDoc(o); D.example = false; FILEH = h || null; changed(); closeDrawer();
-  toast('Aperta “' + D.name + '”' + (h ? ': Salva aggiornerà il file ' + h.name : ' dal file'));
+  leaveExample(); FILEH_PREV = DRIVEF_PREV = null; loadDoc(o); D.example = false; FILEH = h || null; DRIVEF = null; changed(); closeDrawer();
+  toast('Aperta “' + D.name + '”' + (h ? ': Salva aggiornerà il file ' + h.name : ' dal file')); return true;
+}
+/* ---------- Google Drive: ognuno salva nel proprio Drive, nella cartella «Tavola viva» ----------
+   Permesso drive.file: l'app vede e modifica solo i file che ha creato lei. Nessun server: tutto avviene nel browser. */
+const GDRIVE_CLIENT_ID = ''; // ID client OAuth del progetto Google Cloud «Tavola viva» (vuoto = Drive nascosto)
+const GAPI = 'https://www.googleapis.com/drive/v3', GUP = 'https://www.googleapis.com/upload/drive/v3', GFOLDER = 'Tavola viva';
+let DRIVEF = null, DRIVEF_PREV = null, DRIVE_LIST = null, gTok = null, gTokExp = 0, gClient = null, gWaiting = null, gFolder = null;
+function gisLoad() { // la libreria di Google si carica solo quando serve (aprendo il pannello Tavole)
+  if (window.google && google.accounts && google.accounts.oauth2) return Promise.resolve();
+  return gisLoad.p || (gisLoad.p = new Promise((ok, ko) => { const sc = document.createElement('script'); sc.src = 'https://accounts.google.com/gsi/client'; sc.async = true; sc.onload = ok; sc.onerror = () => { gisLoad.p = null; ko(new Error('rete')); }; document.head.appendChild(sc); }));
+}
+function gToken() { // chiede il permesso a Google (la prima volta si apre la finestra per scegliere l'account)
+  if (gTok && Date.now() < gTokExp - 60000) return Promise.resolve(gTok);
+  if (!(window.google && google.accounts && google.accounts.oauth2)) return Promise.reject(new Error('rete'));
+  if (!gClient) gClient = google.accounts.oauth2.initTokenClient({ client_id: GDRIVE_CLIENT_ID, scope: 'https://www.googleapis.com/auth/drive.file',
+    callback: r => { const w = gWaiting; gWaiting = null; if (!w) return; if (r && r.access_token) { gTok = r.access_token; gTokExp = Date.now() + (r.expires_in || 3600) * 1000; w.ok(gTok); } else w.ko(new Error(r && r.error || 'permesso')); },
+    error_callback: e => { const w = gWaiting; gWaiting = null; if (w) w.ko(new Error(e && e.type || 'annullato')); } });
+  return new Promise((ok, ko) => { gWaiting = { ok, ko }; gClient.requestAccessToken({ prompt: gTok ? '' : undefined }); });
+}
+async function gFetch(url, opt) {
+  const t = await gToken(), r = await fetch(url, Object.assign({}, opt, { headers: Object.assign({ Authorization: 'Bearer ' + t }, (opt && opt.headers) || {}) }));
+  if (r.status === 401) { gTok = null; throw new Error('scaduto'); }
+  if (!r.ok) throw new Error('drive ' + r.status);
+  return r;
+}
+async function gFolderId() {
+  if (gFolder) return gFolder;
+  const q = encodeURIComponent(`mimeType='application/vnd.google-apps.folder' and name='${GFOLDER}' and trashed=false`);
+  const l = await (await gFetch(`${GAPI}/files?q=${q}&fields=files(id)&spaces=drive`)).json();
+  if (l.files && l.files.length) return (gFolder = l.files[0].id);
+  const c = await (await gFetch(`${GAPI}/files?fields=id`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: GFOLDER, mimeType: 'application/vnd.google-apps.folder' }) })).json();
+  return (gFolder = c.id);
+}
+const driveErr = e => toast(/rete/.test(e.message) ? 'Google Drive non raggiungibile: controlla la connessione.' : /annullato|popup|permesso|access_denied/.test(e.message) ? 'Accesso a Google Drive annullato.' : 'Google Drive non ha risposto: riprova, oppure salva come file.', 'warn');
+async function driveSave(quiet) {
+  if (D.name === 'Tavola senza nome' && !DRIVEF) { openText({ title: 'Nome della tavola da salvare su Drive', value: '', onOk: x => { if (x.trim()) { D.name = x.trim(); changed(); driveSave(); } } }); return; }
+  const tokP = gToken(); // subito, finché vale il tocco sul pulsante: il browser permette la finestra di Google
+  try {
+    await tokP; const html = await docFile(), name = safeName(D.name) + '.html';
+    if (DRIVEF) {
+      await gFetch(`${GUP}/files/${DRIVEF.id}?uploadType=media`, { method: 'PATCH', headers: { 'Content-Type': 'text/html' }, body: html });
+      if (DRIVEF.name !== name) { await gFetch(`${GAPI}/files/${DRIVEF.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) }); DRIVEF.name = name; }
+    } else {
+      const meta = { name, mimeType: 'text/html', parents: [await gFolderId()] }, b = 'tavolaviva' + Date.now();
+      const body = `--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${b}\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n${html}\r\n--${b}--`;
+      const f = await (await gFetch(`${GUP}/files?uploadType=multipart&fields=id,name`, { method: 'POST', headers: { 'Content-Type': 'multipart/related; boundary=' + b }, body })).json();
+      DRIVEF = { id: f.id, name: f.name };
+    }
+    SAVED = savedKey(); if (D.example) D.example = false; renderTop(); if (drawerKind) renderDrawer();
+    toast(quiet ? 'Tavola “' + D.name + '” salvata, anche su Drive' : 'Salvata su Drive, nella cartella Tavola viva: d’ora in poi Salva aggiorna anche Drive.');
+  } catch (e) { driveErr(e); }
+}
+async function driveList() {
+  const tokP = gToken();
+  try { await tokP; const fid = await gFolderId(), q = encodeURIComponent(`'${fid}' in parents and trashed=false`);
+    DRIVE_LIST = ((await (await gFetch(`${GAPI}/files?q=${q}&orderBy=modifiedTime desc&pageSize=100&fields=files(id,name,modifiedTime)`)).json()).files || []);
+    if (drawerKind) renderDrawer();
+  } catch (e) { driveErr(e); }
+}
+async function driveOpen(id) {
+  try { const txt = await (await gFetch(`${GAPI}/files/${id}?alt=media`)).text(), f = (DRIVE_LIST || []).find(d => d.id === id);
+    if (openText_(txt, null) && f) { DRIVEF = { id, name: f.name }; SAVED = savedKey(); toast('Aperta “' + D.name + '” da Drive: Salva aggiornerà il file su Drive'); }
+  } catch (e) { driveErr(e); }
 }
 function downloadAll() {
   const bd = kvGet(LS.boards) || {}, ex = kvGet(LS.esempi) || {}, n = Object.keys(bd).length + Object.keys(ex).length;
@@ -2275,8 +2344,8 @@ function exportPNG() {
 let prevDoc = null;
 function openExample(kind) { openExampleDoc(sampleDoc(kind)); }
 function openExampleDoc(doc) {
-  if (!D.example) { prevDoc = clone(D); kvSet(LS.prev, prevDoc); FILEH_PREV = FILEH; }
-  FILEH = null; loadDoc(doc); D.example = true; D.exEdited = false; changed();
+  if (!D.example) { prevDoc = clone(D); kvSet(LS.prev, prevDoc); FILEH_PREV = FILEH; DRIVEF_PREV = DRIVEF; }
+  FILEH = DRIVEF = null; loadDoc(doc); D.example = true; D.exEdited = false; changed();
   toast('Esempio aperto. “Passaggi” lo mostra fase per fase; “Chiudi esempio” ti riporta al tuo foglio.');
 }
 function leaveExample() { prevDoc = null; kvSet(LS.prev, null); }
@@ -2291,7 +2360,7 @@ function archive(doc, label) { // mette un foglio al sicuro nell'elenco Tavole, 
 function freshDoc(from) { const d = newDoc(); if (from && from.header) { d.header.nome = from.header.nome || ''; d.header.classe = from.header.classe || ''; } return d; }
 function backToSheet() {
   if (D.exEdited) archive(D, D.name + ' (modificato)');
-  const p = prevDoc || kvGet(LS.prev); leaveExample(); loadDoc(p && p.app === 'tavolaviva' ? p : freshDoc()); D.example = false; FILEH = FILEH_PREV; FILEH_PREV = null; changed();
+  const p = prevDoc || kvGet(LS.prev); leaveExample(); loadDoc(p && p.app === 'tavolaviva' ? p : freshDoc()); D.example = false; FILEH = FILEH_PREV; DRIVEF = DRIVEF_PREV; FILEH_PREV = DRIVEF_PREV = null; changed();
   toast(D.strokes.length ? 'Sei tornata al tuo foglio' : 'Foglio bianco pronto');
 }
 function newSheet() {
@@ -2300,7 +2369,7 @@ function newSheet() {
   if (D.example) { if (D.exEdited) archive(D, D.name + ' (modificato)'); const p = prevDoc || kvGet(LS.prev); if (p) saved = archive(p); leaveExample(); }
   else saved = archive(D);
   const hd = D.example ? (prevDoc || kvGet(LS.prev) || D) : D;
-  FILEH = FILEH_PREV = null; loadDoc(freshDoc(hd)); D.example = false; changed();
+  FILEH = FILEH_PREV = DRIVEF = DRIVEF_PREV = null; loadDoc(freshDoc(hd)); D.example = false; changed();
   toast(saved ? 'Foglio bianco pronto. Il disegno di prima è in Tavole.' : 'Foglio bianco pronto');
 }
 $('#exBack').onclick = () => { if (!gst) backToSheet(); };
