@@ -269,7 +269,7 @@ a.btn{text-decoration:none;color:inherit;box-sizing:border-box}
     <div class="padrow"><button class="key fn" id="cfNo">Annulla</button><button class="key ok" id="cfYes">Conferma</button></div>
   </div>
 </div>
-<input type="file" id="fileIn" accept=".html,.htm,.tavola,.json" hidden>
+<input type="file" id="fileIn" accept=".pdf,.html,.htm,.tavola,.json" hidden>
 <script>
 (() => {
 'use strict';
@@ -1991,7 +1991,8 @@ const GUIDA = [
     '<b>Tavole</b>: elenco delle tavole salvate da aprire; <b>Nuovo foglio</b> mette da parte il lavoro attuale nell’elenco.',
     'L’elenco <b>Tavole</b> resta solo <b>in questo browser, in questo profilo di Chrome e su questo computer</b>: cambiando account (per esempio da quello personale a quello della scuola) o computer non si vede. Per averle ovunque, usa Salva come file o Scarica tutte le tavole.',
     '<b>Salva come file…</b>: scegli tu dove metterla (Documenti, una chiavetta…). Da lì in poi <b>Salva</b> aggiorna anche quel file (dove il browser non lo permette, il file si scarica in Download). Per averla su Drive, carica il file su drive.google.com.',
-    '<b>Per riaprire il file</b>: doppio clic, si vede il disegno e il pulsante <b>Apri in Tavola viva</b> lo riporta nell’app (serve internet). Oppure, da Tavole, <b>Riapri un file salvato…</b>',
+    '<b>Il file è un PDF</b>: col doppio clic (o in Google Drive) si vede il disegno, pronto da stampare. Dentro ci sono anche i dati per modificarla: il pulsante verde <b>Apri in Tavola viva</b> in alto la riporta nell’app (serve internet; il pulsante non si stampa). Oppure, da Tavole, <b>Riapri un file salvato…</b> o <b>Apri da Drive</b>.',
+    'Anche <b>Tavola in PDF</b> si può riaprire così. I file salvati prima (.html) si aprono ancora.',
     '<b>Scarica tutte le tavole</b>: un unico file con tutte le tavole e gli esempi. Aprendolo con Riapri un file salvato… in un altro profilo o computer, le ritrovi tutte nell’elenco.',
     '<b>PDF</b> e <b>PNG</b> della tavola e dei passaggi, in scala reale.',
     'In Tavole trovi anche alcune <b>costruzioni preparate</b> da mostrare passo passo.']],
@@ -2040,10 +2041,10 @@ function boardsHTML() {
   return `<div class="row"><span class="k">Tavola aperta</span><div class="wrap"><button class="btn" data-a="rename" style="flex:1;justify-content:flex-start;min-width:0;overflow:hidden">${esc(D.name)}</button><button class="btn primary" data-a="savelocal">Salva</button></div><div class="wrap"><button class="btn" data-a="new">Nuovo foglio bianco</button></div></div>
   <div class="row"><span class="k">Salvate in questo browser</span><div class="list">${names.length ? names.map(n => `<div class="item"><span class="nm">${esc(n)}<br><span class="dt">${new Date(boards[n].savedAt || 0).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })} · ${(boards[n].doc.steps || []).length} passaggi</span></span><button class="btn" data-a="openlocal" data-v="${esc(n)}">Apri</button><button class="btn ghost" data-a="dellocal" data-v="${esc(n)}">Elimina</button></div>`).join('') : '<div class="empty">Nessuna tavola salvata.</div>'}</div></div>
   ${GDRIVE_CLIENT_ID ? `<div class="row"><span class="k">Google Drive</span><div class="wrap"><button class="btn primary" data-a="drivesave">Salva su Drive</button><button class="btn" data-a="driveopen">Apri da Drive</button></div>
-    ${DRIVEF ? `<div class="empty">Collegata a Drive: <b>${esc(DRIVEF.name)}</b>. Ogni volta che premi <b>Salva</b> si aggiorna anche su Drive.</div>` : `<div class="empty">La tavola va nel <b>tuo</b> Drive, nella cartella <b>Tavola viva</b>, con l’account Google che scegli: da qualunque computer la ritrovi con <b>Apri da Drive</b>. Nessun altro la vede.</div>`}
-    ${DRIVE_LIST ? `<div class="list">${DRIVE_LIST.length ? DRIVE_LIST.map(d => `<div class="item"><span class="nm">${esc(d.name.replace(/\.html?$/i, ''))}<br><span class="dt">${new Date(d.modifiedTime).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })}</span></span><button class="btn" data-a="driveget" data-v="${esc(d.id)}">Apri</button></div>`).join('') : '<div class="empty">Nella cartella Tavola viva del tuo Drive non ci sono ancora tavole.</div>'}</div>` : ''}</div>` : ''}
+    ${DRIVEF ? `<div class="empty">Collegata a Drive: <b>${esc(DRIVEF.name)}</b>. Ogni volta che premi <b>Salva</b> si aggiorna anche su Drive.</div>` : `<div class="empty">La tavola va nel <b>tuo</b> Drive come PDF (si vede il disegno), nella cartella <b>Tavola viva</b>, con l’account Google che scegli: da qualunque computer la ritrovi con <b>Apri da Drive</b>. Nessun altro la vede.</div>`}
+    ${DRIVE_LIST ? `<div class="list">${DRIVE_LIST.length ? DRIVE_LIST.map(d => `<div class="item"><span class="nm">${esc(d.name.replace(/\.(pdf|html?)$/i, ''))}<br><span class="dt">${new Date(d.modifiedTime).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })}</span></span><button class="btn" data-a="driveget" data-v="${esc(d.id)}">Apri</button></div>`).join('') : '<div class="empty">Nella cartella Tavola viva del tuo Drive non ci sono ancora tavole.</div>'}</div>` : ''}</div>` : ''}
   <div class="row"><span class="k">Tavola come file, per ritrovarla ovunque${GDRIVE_CLIENT_ID ? '' : ' (consigliato)'}</span><div class="wrap"><button class="btn primary" data-a="saveasfile">${FS_OK ? 'Salva come file…' : 'Scarica file della tavola'}</button><button class="btn" data-a="openfile">Riapri un file salvato…</button></div>
-    ${FILEH ? `<div class="empty">Collegata al file <b>${esc(FILEH.name)}</b>: ogni volta che premi <b>Salva</b> si aggiorna anche il file.</div>` : `<div class="empty">${FS_OK ? 'Scegli tu dove metterla (Documenti, una chiavetta…): da lì in poi <b>Salva</b> aggiorna anche quel file.' : 'Il file finisce nella cartella Download.'} Per portarla su Drive, caricalo su drive.google.com come un qualsiasi file.<br><b>Per riaprirla</b> fai doppio clic sul file: vedi il disegno e il pulsante <b>Apri in Tavola viva</b>. Oppure, da qui, <b>Riapri un file salvato…</b></div>`}
+    ${FILEH ? `<div class="empty">Collegata al file <b>${esc(FILEH.name)}</b>: ogni volta che premi <b>Salva</b> si aggiorna anche il file.</div>` : `<div class="empty">${FS_OK ? 'Scegli tu dove metterla (Documenti, una chiavetta…): da lì in poi <b>Salva</b> aggiorna anche quel file.' : 'Il file (PDF) finisce nella cartella Download.'} Per portarla su Drive, caricalo su drive.google.com come un qualsiasi file.<br>Il file è un <b>PDF</b>: col doppio clic vedi il disegno, e il pulsante <b>Apri in Tavola viva</b> la riapre qui. Oppure, da qui, <b>Riapri un file salvato…</b></div>`}
     <div class="wrap"><button class="btn" data-a="downloadall">Scarica tutte le tavole</button></div>
     <div class="empty">Un unico file con tutte le tavole e gli esempi di questo browser: con <b>Riapri un file salvato…</b> le ritrovi tutte nell’elenco, in un altro computer o in un altro profilo.</div></div>
   <div class="row"><span class="k">Scarica PDF o immagine</span><div class="wrap"><button class="btn primary" data-a="pdf">Tavola in PDF</button><button class="btn primary" data-a="pdfsteps">Passaggi in PDF</button></div><div class="wrap"><button class="btn" data-a="png">Tavola in PNG</button><button class="btn" data-a="pngsteps">Passaggi in PNG</button></div><div class="empty">La tavola: bordo del foglio, squadratura, cartigli e segni. Il PDF è in scala reale (1 cm = 1 cm). I passaggi in PDF: una pagina per passaggio, con gli strumenti nella loro posizione; in PNG: tutte le fasi in un'unica immagine.</div></div>
@@ -2117,19 +2118,20 @@ window.addEventListener('beforeunload', e => { if (!D.example && D.strokes.lengt
 let FILEH = null, FILEH_PREV = null; // il file collegato alla tavola aperta: Salva lo aggiorna (nei browser che lo permettono)
 // in una finestra dentro un'altra pagina (anteprima) il browser non permette di scegliere file: si scarica e si apre col selettore classico
 const IN_FRAME = (() => { try { return window.top !== window.self; } catch (_) { return true; } })();
-const FS_OK = 'showSaveFilePicker' in window && !IN_FRAME, EXT = '.html';
-const FILE_TYPES = [{ description: 'Tavola viva (pagina che si apre con il doppio clic)', accept: { 'text/html': [EXT] } }], OPEN_TYPES = [{ description: 'Tavola viva', accept: { 'text/html': ['.html', '.htm'], 'application/octet-stream': ['.tavola', '.json'] } }]; // .tavola e .json: i file salvati prima
+const FS_OK = 'showSaveFilePicker' in window && !IN_FRAME, EXT = '.pdf';
+const FILE_TYPES = [{ description: 'Tavola viva (PDF che si può anche riaprire e modificare)', accept: { 'application/pdf': [EXT] } }], OPEN_TYPES = [{ description: 'Tavola viva', accept: { 'application/pdf': ['.pdf'], 'text/html': ['.html', '.htm'], 'application/octet-stream': ['.tavola', '.json'] } }]; // .html, .tavola e .json: i file salvati prima
 const APP_URL = /^https?:$/.test(location.protocol) && !/claude\.ai|claudeusercontent/.test(location.hostname) ? location.origin + location.pathname.replace(/[^/]*$/, '') : 'https://giulitecnologia.github.io/tavola-viva/';
 const MAX_LINK = 1000000; // oltre questa lunghezza il browser potrebbe rifiutare il collegamento
 const docObj = () => { const c = clone(D); delete c.example; delete c.exEdited; return c; };
-/* il file è una piccola pagina web: col doppio clic mostra il disegno e un pulsante che apre la tavola nell'app (i dati viaggiano compressi nel collegamento) */
-async function packLink(o) {
-  try {
-    const cs = new Blob([JSON.stringify(o)]).stream().pipeThrough(new CompressionStream('deflate-raw')), u8 = new Uint8Array(await new Response(cs).arrayBuffer());
-    let bin = ''; for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
-    const link = APP_URL + '#tavola=' + btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    return link.length < MAX_LINK ? link : null;
-  } catch (_) { return null; }
+/* il file della tavola è un PDF: si vede il disegno (anche in Drive) e dentro, nascosti, ci sono i dati compressi per riaprirla e modificarla;
+   un pulsante sul PDF (solo a schermo, non si stampa) la riapre nell'app con i dati nel collegamento */
+async function packData(o) { // JSON compresso in base64 «da URL»
+  const cs = new Blob([JSON.stringify(o)]).stream().pipeThrough(new CompressionStream('deflate-raw')), u8 = new Uint8Array(await new Response(cs).arrayBuffer());
+  let bin = ''; for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+async function packLink(o, b64) {
+  try { const link = APP_URL + '#tavola=' + (b64 || await packData(o)); return link.length < MAX_LINK ? link : null; } catch (_) { return null; }
 }
 async function unpackLink(b64) {
   const bin = atob(b64.replace(/-/g, '+').replace(/_/g, '/')), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
@@ -2147,17 +2149,29 @@ ${link ? `<a class="btn" href="${link}">${escH(opts.btn)}</a><p class="note">Ser
 ${opts.img ? `<img src="${opts.img}" alt="${escH(opts.title)}">` : ''}</main>
 <script type="application/json" id="tavola-viva-dati">${data}<\/script></body></html>`; // <\/script>: altrimenti chiuderebbe lo script della pagina
 }
-const docFile = async () => { const o = docObj(), { w, h } = sheetDims(o.sheet), c = renderToCanvas(o, Math.min(40, 1600 / Math.max(w, h)));
-  return fileHTML(o, { title: o.name, img: c.toDataURL('image/png'), sub: 'Tavola viva · salvata il ' + new Date().toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }), btn: 'Apri in Tavola viva' }); };
+async function docPDF(o, k) { // la tavola in scala reale, con i dati per riaprirla
+  const { w, h } = sheetDims(o.sheet), data = await packData(o);
+  return makePDF([{ c: renderToCanvas(o, k || Math.min(60, 2400 / Math.max(w, h))), w, h }], { data, link: await packLink(o, data) });
+}
+const docFile = () => docPDF(docObj());
+async function openBuf(buf, h) { // apre un file di Tavola viva: PDF con i dati dentro, oppure .html/.tavola/.json di prima
+  const u8 = new Uint8Array(buf);
+  if (u8[0] === 0x25 && u8[1] === 0x50 && u8[2] === 0x44 && u8[3] === 0x46) { // %PDF
+    const m = /%TAVOLAVIVA-INIZIO\n([A-Za-z0-9_-]+)\n%TAVOLAVIVA-FINE/.exec(new TextDecoder('latin1').decode(u8));
+    if (!m) { toast('Questo PDF non contiene una tavola da modificare: si riaprono solo i PDF salvati da Tavola viva.', 'warn'); return false; }
+    try { return openText_(await unpackLink(m[1]), h); } catch (_) { toast('Non sono riuscita a leggere la tavola in questo PDF.', 'warn'); return false; }
+  }
+  return openText_(new TextDecoder().decode(u8), h);
+}
 async function writeFile(h) {
   if (h.queryPermission && await h.queryPermission({ mode: 'readwrite' }) !== 'granted' && await h.requestPermission({ mode: 'readwrite' }) !== 'granted') throw new Error('permesso');
-  const txt = await docFile(), w = await h.createWritable(); await w.write(txt); await w.close();
+  const pdf = await docFile(), w = await h.createWritable(); await w.write(pdf); await w.close();
 }
-const downloadDoc = async () => downloadBlob(new Blob([await docFile()], { type: 'text/html' }), safeName(D.name) + EXT);
+const downloadDoc = async () => downloadBlob(await docFile(), safeName(D.name) + EXT);
 async function saveAsFile() {
   if (!FS_OK) return downloadDoc();
   let h; try { h = await showSaveFilePicker({ suggestedName: safeName(D.name) + EXT, types: FILE_TYPES, excludeAcceptAllOption: true }); } catch (e) { if (e && e.name === 'AbortError') return; return downloadDoc(); }
-  if (D.name === 'Tavola senza nome') { D.name = h.name.replace(/\.(html?|tavola|json)$/i, ''); changed(); }
+  if (D.name === 'Tavola senza nome') { D.name = h.name.replace(/\.(pdf|html?|tavola|json)$/i, ''); changed(); }
   try { await writeFile(h); } catch (_) { toast('Non sono riuscita a scrivere il file: scaricalo.', 'warn'); return downloadDoc(); }
   FILEH = h; SAVED = savedKey(); if (D.example) D.example = false; renderTop(); if (drawerKind) renderDrawer();
   toast('Salvata nel file ' + h.name + '. D’ora in poi Salva aggiorna anche questo file.');
@@ -2165,7 +2179,7 @@ async function saveAsFile() {
 async function openFile() {
   if (!('showOpenFilePicker' in window) || IN_FRAME) return $('#fileIn').click();
   let h; try { [h] = await showOpenFilePicker({ types: OPEN_TYPES }); } catch (e) { if (e && e.name === 'AbortError') return; return $('#fileIn').click(); }
-  openText_(await (await h.getFile()).text(), h);
+  openBuf(await (await h.getFile()).arrayBuffer(), h);
 }
 function openText_(txt, h) {
   const m = /<script type="application\/json" id="tavola-viva-dati">([\s\S]*?)<\/script>/.exec(txt); if (m) txt = m[1]; // file salvato come pagina
@@ -2212,13 +2226,13 @@ async function driveSave(quiet) {
   if (D.name === 'Tavola senza nome' && !DRIVEF) { openText({ title: 'Nome della tavola da salvare su Drive', value: '', onOk: x => { if (x.trim()) { D.name = x.trim(); changed(); driveSave(); } } }); return; }
   const tokP = gToken(); // subito, finché vale il tocco sul pulsante: il browser permette la finestra di Google
   try {
-    await tokP; const html = await docFile(), name = safeName(D.name) + '.html';
+    await tokP; const pdf = await docFile(), name = safeName(D.name) + '.pdf';
     if (DRIVEF) {
-      await gFetch(`${GUP}/files/${DRIVEF.id}?uploadType=media`, { method: 'PATCH', headers: { 'Content-Type': 'text/html' }, body: html });
-      if (DRIVEF.name !== name) { await gFetch(`${GAPI}/files/${DRIVEF.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) }); DRIVEF.name = name; }
+      await gFetch(`${GUP}/files/${DRIVEF.id}?uploadType=media`, { method: 'PATCH', headers: { 'Content-Type': 'application/pdf' }, body: pdf });
+      if (DRIVEF.name !== name) { await gFetch(`${GAPI}/files/${DRIVEF.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, mimeType: 'application/pdf' }) }); DRIVEF.name = name; } // anche i vecchi .html diventano PDF
     } else {
-      const meta = { name, mimeType: 'text/html', parents: [await gFolderId()] }, b = 'tavolaviva' + Date.now();
-      const body = `--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${b}\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n${html}\r\n--${b}--`;
+      const meta = { name, mimeType: 'application/pdf', parents: [await gFolderId()] }, b = 'tavolaviva' + Date.now();
+      const body = new Blob([`--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${b}\r\nContent-Type: application/pdf\r\n\r\n`, pdf, `\r\n--${b}--`]);
       const f = await (await gFetch(`${GUP}/files?uploadType=multipart&fields=id,name`, { method: 'POST', headers: { 'Content-Type': 'multipart/related; boundary=' + b }, body })).json();
       DRIVEF = { id: f.id, name: f.name };
     }
@@ -2234,8 +2248,8 @@ async function driveList() {
   } catch (e) { driveErr(e); }
 }
 async function driveOpen(id) {
-  try { const txt = await (await gFetch(`${GAPI}/files/${id}?alt=media`)).text(), f = (DRIVE_LIST || []).find(d => d.id === id);
-    if (openText_(txt, null) && f) { DRIVEF = { id, name: f.name }; SAVED = savedKey(); toast('Aperta “' + D.name + '” da Drive: Salva aggiornerà il file su Drive'); }
+  try { const buf = await (await gFetch(`${GAPI}/files/${id}?alt=media`)).arrayBuffer(), f = (DRIVE_LIST || []).find(d => d.id === id);
+    if (await openBuf(buf, null) && f) { DRIVEF = { id, name: f.name }; SAVED = savedKey(); toast('Aperta “' + D.name + '” da Drive: Salva aggiornerà il file su Drive'); }
   } catch (e) { driveErr(e); }
 }
 function downloadAll() {
@@ -2243,7 +2257,7 @@ function downloadAll() {
   if (!n) { toast('In questo browser non ci sono tavole salvate.', 'warn'); return; }
   const o = { app: 'tavolaviva-archivio', savedAt: Date.now(), boards: bd, esempi: ex };
   fileHTML(o, { title: 'Tutte le tavole', sub: n + (n === 1 ? ' tavola' : ' tavole') + ' di Tavola viva · ' + new Date().toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) + ': ' + Object.keys(bd).concat(Object.keys(ex)).join(', '), btn: 'Aggiungi queste tavole a Tavola viva' })
-    .then(t => downloadBlob(new Blob([t], { type: 'text/html' }), 'tutte-le-tavole-' + new Date().toISOString().slice(0, 10) + EXT));
+    .then(t => downloadBlob(new Blob([t], { type: 'text/html' }), 'tutte-le-tavole-' + new Date().toISOString().slice(0, 10) + '.html'));
 }
 function importAll(o) { // aggiunge all'elenco le tavole dell'archivio, senza toccare quelle che ci sono già
   const bd = kvGet(LS.boards) || {}, ex = kvGet(LS.esempi) || {}; let n = 0;
@@ -2259,8 +2273,7 @@ function afterSheet() {
 }
 $('#fileIn').addEventListener('change', e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
-  const r = new FileReader(); r.onload = () => openText_(r.result, null);
-  r.readAsText(f);
+  f.arrayBuffer().then(b => openBuf(b, null));
 });
 const safeName = s => (s || 'tavola').replace(/[^\w\-àèéìòù ]+/gi, '').trim().replace(/\s+/g, '-') || 'tavola';
 function downloadBlob(blob, name) {
@@ -2299,28 +2312,37 @@ function exportSteps() {
 }
 // PDF in scala reale (1 cm = 1 cm), una pagina per immagine; scritto qui senza librerie esterne
 function jpegBytes(c) { const d = atob(c.toDataURL('image/jpeg', 0.92).split(',')[1]), u = new Uint8Array(d.length); for (let i = 0; i < d.length; i++) u[i] = d.charCodeAt(i); return u; }
-function makePDF(pages) {
+function makePDF(pages, extra) { // extra: { data, link } per il PDF della tavola
   const enc = new TextEncoder(), parts = [], offs = []; let pos = 0;
   const put = x => { const b = typeof x === 'string' ? enc.encode(x) : x; parts.push(b); pos += b.length; };
   const obj = (id, body) => { offs[id] = pos; put(id + ' 0 obj\n'); body(); put('\nendobj\n'); };
   const n = pages.length, pt = cm => (cm * 72 / 2.54).toFixed(2);
   put('%PDF-1.4\n%âãÏÓ\n');
-  obj(1, () => put('<< /Type /Catalog /Pages 2 0 R >>'));
+  const X = 3 + 3 * n, dataId = extra && extra.data ? X : 0, btn = extra && extra.link ? X + (dataId ? 1 : 0) : 0; // oggetti in più dopo le pagine
+  obj(1, () => put(`<< /Type /Catalog /Pages 2 0 R${dataId ? ` /TavolaViva ${dataId} 0 R` : ''} >>`));
   obj(2, () => put(`<< /Type /Pages /Count ${n} /Kids [${pages.map((_, i) => (3 + 3 * i) + ' 0 R').join(' ')}] >>`));
   pages.forEach((p, i) => {
     const W = pt(p.w), H = pt(p.h), img = jpegBytes(p.c), cs = `q ${W} 0 0 ${H} 0 0 cm /Im0 Do Q`;
-    obj(3 + 3 * i, () => put(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /XObject << /Im0 ${5 + 3 * i} 0 R >> >> /Contents ${4 + 3 * i} 0 R >>`));
+    obj(3 + 3 * i, () => put(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /XObject << /Im0 ${5 + 3 * i} 0 R >> >> /Contents ${4 + 3 * i} 0 R${btn && !i ? ` /Annots [${btn} 0 R ${btn + 1} 0 R]` : ''} >>`));
     obj(4 + 3 * i, () => put(`<< /Length ${cs.length} >>\nstream\n${cs}\nendstream`));
     obj(5 + 3 * i, () => { put(`<< /Type /XObject /Subtype /Image /Width ${p.c.width} /Height ${p.c.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${img.length} >>\nstream\n`); put(img); put('\nendstream'); });
   });
-  const total = 3 + 3 * n, xref = pos;
+  if (dataId) obj(dataId, () => { const t = `%TAVOLAVIVA-INIZIO\n${extra.data}\n%TAVOLAVIVA-FINE`; put(`<< /Length ${t.length} >>\nstream\n${t}\nendstream`); });
+  if (btn) { // «Apri in Tavola viva» nel margine in alto, al centro: si vede a schermo ma non si stampa
+    const p = pages[0], bw = 6.4, bh = 0.72, x0 = (p.w - bw) / 2, y0 = p.h - 0.14 - bh, R = `[${pt(x0)} ${pt(y0)} ${pt(x0 + bw)} ${pt(y0 + bh)}]`, BW = pt(bw), BH = pt(bh), fs = 11;
+    const ap = `0.122 0.361 0.271 rg 0 0 ${BW} ${BH} re f BT /F1 ${fs} Tf 1 1 1 rg ${((bw * 72 / 2.54 - 97) / 2).toFixed(2)} ${((bh * 72 / 2.54 - fs * 0.72) / 2).toFixed(2)} Td (Apri in Tavola viva) Tj ET`;
+    obj(btn, () => put(`<< /Type /Annot /Subtype /Stamp /Rect ${R} /F 0 /Contents (Apri in Tavola viva) /AP << /N ${btn + 2} 0 R >> >>`));
+    obj(btn + 1, () => put(`<< /Type /Annot /Subtype /Link /Rect ${R} /Border [0 0 0] /A << /S /URI /URI (${extra.link}) >> >>`));
+    obj(btn + 2, () => put(`<< /Type /XObject /Subtype /Form /BBox [0 0 ${BW} ${BH}] /Resources << /Font << /F1 ${btn + 3} 0 R >> >> /Length ${ap.length} >>\nstream\n${ap}\nendstream`));
+    obj(btn + 3, () => put('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>'));
+  }
+  const total = X + (dataId ? 1 : 0) + (btn ? 4 : 0), xref = pos;
   let x = `xref\n0 ${total}\n0000000000 65535 f \n`; for (let k = 1; k < total; k++) x += String(offs[k]).padStart(10, '0') + ' 00000 n \n';
   put(x + `trailer\n<< /Size ${total} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
   return new Blob(parts, { type: 'application/pdf' });
 }
-function exportPDF() {
-  const { w, h } = sheetDims(D.sheet), k = Math.min(80, 4000 / Math.max(w, h));
-  downloadBlob(makePDF([{ c: renderToCanvas(D, k), w, h }]), safeName(D.name) + '.pdf');
+async function exportPDF() { // in alta qualità, e si può anche riaprire in Tavola viva
+  const { w, h } = sheetDims(D.sheet); downloadBlob(await docPDF(docObj(), Math.min(80, 4000 / Math.max(w, h))), safeName(D.name) + '.pdf');
 }
 function exportStepsPDF() {
   const S = D.steps; if (!S.length) { toast('Non ci sono passaggi: registrali con “Segna passaggio”.', 'warn'); return; }
@@ -2484,7 +2506,7 @@ function openFromLink() {
 }
 
 /* app installata: un doppio clic su un file .tavola la apre direttamente qui */
-if ('launchQueue' in window) launchQueue.setConsumer(async p => { const h = p.files && p.files[0]; if (h) openText_(await (await h.getFile()).text(), h); });
+if ('launchQueue' in window) launchQueue.setConsumer(async p => { const h = p.files && p.files[0]; if (h) openBuf(await (await h.getFile()).arrayBuffer(), h); });
 
 /* interfaccia di prova per le verifiche automatiche */
 window.TV = { exportSteps, makePDF, exportPDF, exportStepsPDF, setZoom, lineTargets, openExample, backToSheet, get D() { return D; }, U, get V() { return V; }, edges, cgeom, sheetDims, renderToCanvas, loadDoc, sampleDoc, snapPts };
