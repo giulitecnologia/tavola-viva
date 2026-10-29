@@ -581,9 +581,9 @@ function renderLegend() {
     else if (sd.kind === 'cubo') r.push(`facce quadrate di lato ${c(d.l)}`);
     else if (sd.kind === 'prisma3') r.push(`base triangolo equilatero di lato ${c(d.l)}`, `altezza ${c(d.h)}`);
     else if (sd.kind === 'prisma6') r.push(`base esagono regolare di lato ${c(d.l)}`, `altezza ${c(d.h)}`);
-    else if (sd.kind === 'piramide') r.push(`base quadrato di lato ${c(d.l)}`, `altezza ${c(d.h)}`, `spigolo laterale ${c(Math.hypot(d.l / Math.SQRT2, d.h))}`, `apotema ${c(Math.hypot(d.l / 2, d.h))}`);
+    else if (sd.kind === 'piramide') r.push(`base quadrato di lato ${c(d.l)}`, `altezza ${c(d.h)}`);
     else if (sd.kind === 'cilindro') r.push(`base cerchio di diametro ${c(d.d)}`, `altezza ${c(d.h)}`);
-    else r.push(`base cerchio di diametro ${c(d.d)}`, `altezza ${c(d.h)}`, `apotema ${c(Math.hypot(d.d / 2, d.h))}`);
+    else r.push(`base cerchio di diametro ${c(d.d)}`, `altezza ${c(d.h)}`);
     if (sd.rot) r.push(`ruotato di ${sd.rot}°`);
     r.push(`<span class="r">da PV ${c(sd.dPV)} · da PL ${c(sd.dPL)}${sd.z0 ? ' · da PO ' + c(sd.z0) : ''}</span>`);
     return `<div class="s"><span class="n">${i + 1} · ${KINDS[sd.kind].n}</span><br>${r.join('<br>')}</div>`;
