@@ -73,6 +73,25 @@ button{font:inherit;color:inherit}
 #open{flex:1 1 220px;min-width:160px;height:40px;accent-color:var(--accent);touch-action:none}
 #openV{font-weight:700;font-variant-numeric:tabular-nums;min-width:40px}
 
+/* pannello Esercizi */
+#drawer{position:fixed;top:0;right:0;bottom:0;width:min(420px,100%);background:var(--chrome);border-left:1px solid var(--line);box-shadow:-8px 0 30px #1d282b33;z-index:20;display:flex;flex-direction:column}
+#drawer header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--line)}
+#drawer header b{font-size:19px}
+#dBody{overflow-y:auto;padding:12px 14px 30px;display:flex;flex-direction:column;gap:16px;-webkit-user-select:text;user-select:text}
+#dBody .k{font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:6px;display:block}
+#dBody .wrap{display:flex;flex-wrap:wrap;gap:6px}
+#dBody .empty{color:var(--muted);font-size:13.5px}
+#dBody .list{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+#dBody .item{display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px 6px 6px 10px}
+#dBody .item .nm{flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis}
+#dBody .item .dt{font-weight:400;font-size:12.5px;color:var(--muted)}
+#dBody input[type=text]{flex:1;min-width:0;min-height:44px;border:1px solid var(--line);border-radius:10px;padding:0 10px;font:inherit;font-weight:600}
+#dBody details{background:#fff;border:1px solid var(--line);border-radius:12px;padding:0 12px}
+#dBody summary{cursor:pointer;padding:12px 2px;font-weight:700}
+#dBody details .wrap{margin-bottom:10px}
+#backdrop{position:fixed;inset:0;background:#1d282b33;z-index:19}
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#1c2126;color:#fff;padding:10px 16px;border-radius:12px;font-weight:600;z-index:30;max-width:calc(100% - 32px);opacity:0;pointer-events:none;transition:opacity .25s}
+#toast.show{opacity:1}#toast.warn{background:#8a3b0d}
 @media (max-width:1100px){#app{grid-template-columns:84px 1fr 170px}.sol{font-size:11px}.sol svg{width:26px;height:26px}.brand b{display:none}}
 </style>
 </head><body>
@@ -81,6 +100,8 @@ button{font:inherit;color:inherit}
     <div class="brand"><svg class="logo" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 26a13 13 0 0 1 22 0" stroke-width="1.6" stroke-dasharray="2.5 2.5"/><path d="M16 4v3M16 7 9 26M16 7l7 19"/><circle cx="16" cy="8" r="2.2" fill="currentColor"/></svg><b>Tavola viva</b><span>· Proiezioni ortogonali</span></div>
     <span class="test">In prova · non definitiva</span>
     <div class="spacer"></div>
+    <button class="btn" id="saveBtn" title="Salva l’esercizio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg>Salva</button>
+    <button class="btn" id="exBtn" title="Esercizi salvati, Google Drive, PDF del foglio, Porta in Tavola viva"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 6h6l2 2h8v11H4z"/></svg>Esercizi</button>
     <button class="btn" id="view3d" title="Torna alla vista del triedro in prospettiva">Vista 3D</button>
     <button class="btn" id="viewFront" title="Guarda il triedro di fronte: con i piani aperti è il disegno sul foglio">Vista di fronte</button>
     <a class="btn" href="index.html" title="Torna alla tavola"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5-7 7 7 7"/></svg>Tavola</a>
@@ -106,6 +127,10 @@ button{font:inherit;color:inherit}
 
   <aside id="side" aria-label="Misure e opzioni"></aside>
 
+  <div id="backdrop" hidden></div>
+  <aside id="drawer" hidden aria-label="Esercizi"><header><b>Esercizi</b><button class="btn" id="dClose">Chiudi</button></header><div id="dBody"></div></aside>
+  <div id="toast" role="status"></div>
+  <input type="file" id="fileIn" accept=".pdf" hidden>
   <div id="bottom">
     <button class="btn primary" id="playBtn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg><span id="playLbl">Apri i piani</span></button>
     <span class="k">Apertura</span>
@@ -148,7 +173,7 @@ const KINDS = {
 };
 const defDims = k => Object.fromEntries(KINDS[k].dims.map(d => [d[0], d[2]]));
 const newSolid = (kind, o) => Object.assign({ kind, dims: { [kind]: defDims(kind) }, dPV: 2, dPL: 2, z0: 0, rot: 0 }, o || {});
-const S = { solids: [newSolid('parallelepipedo')], act: 0, open: 0, rays: true, hidden: true, solid: true, labels: true, recall: true, sheet: true,
+const S = { name: 'Esercizio senza nome', solids: [newSolid('parallelepipedo')], act: 0, open: 0, rays: true, hidden: true, solid: true, labels: true, recall: true, sheet: true,
   sec: { on: false, type: 'oriz', pos: 3, ang: 30, cut: true } };
 try {
   const o = JSON.parse(localStorage.getItem('tavolaviva.proiezioni')) || {};
@@ -672,8 +697,234 @@ new ResizeObserver(layout).observe(stage);
 rebuild(); lastSize = JSON.stringify(scene()); renderSide(); setOpen(0); layout();
 $('#betaOk').onclick = () => { $('#beta').hidden = true; try { sessionStorage.setItem('tavolaviva.betaok', '1'); } catch (_) { } }; // l'avviso ricompare a ogni nuova apertura del browser
 try { if (sessionStorage.getItem('tavolaviva.betaok')) $('#beta').hidden = true; } catch (_) { }
+/* ================= esercizi: salvare, Drive, PDF del foglio, Porta in Tavola viva ================= */
+let toastT = 0;
+function toast(msg, kind) { const el = $('#toast'); el.textContent = msg; el.className = 'show' + (kind ? ' ' + kind : ''); clearTimeout(toastT); toastT = setTimeout(() => el.className = '', kind === 'warn' ? 4200 : 2800); }
+const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+const safeName = t => (t || 'esercizio').replace(/[^\w\-àèéìòù ]+/gi, '').trim().replace(/\s+/g, '-') || 'esercizio';
+const LSX = 'tavolaviva.proiezioni.esercizi', NONAME = 'Esercizio senza nome';
+const exList = () => { try { return JSON.parse(localStorage.getItem(LSX)) || {}; } catch (_) { return {}; } };
+const exSnap = () => { const { open, act, ...keep } = S; return JSON.parse(JSON.stringify(keep)); };
+const autoName = () => [...new Set(S.solids.map(sd => KINDS[sd.kind].n))].join(' e ') + (S.sec.on ? ' con sezione' : '');
+function loadExercise(o) { // riapre un esercizio salvato (dall'elenco, da un file, da Drive o dal pulsante del PDF)
+  if (!o || !Array.isArray(o.solids) || !o.solids.length) { toast('Questo non è un esercizio delle Proiezioni.', 'warn'); return false; }
+  S.solids = o.solids; S.sec = Object.assign({ on: false, type: 'oriz', pos: 3, ang: 30, cut: true }, o.sec || {}); S.name = o.name || NONAME;
+  for (const k of ['rays', 'hidden', 'solid', 'labels', 'recall', 'sheet']) if (k in o) S[k] = o[k];
+  S.act = 0; SHK = 1; DRIVEF = null; ADDING = null; changed(); setOpen(0); return true;
+}
+function exSave() { // nell'elenco di questo browser (e su Drive, se l'esercizio è collegato)
+  if (S.name === NONAME) S.name = autoName();
+  const L = exList(); L[S.name] = { savedAt: Date.now(), s: exSnap() };
+  try { localStorage.setItem(LSX, JSON.stringify(L)); } catch (_) { toast('Spazio del browser esaurito: salvalo su Drive o come PDF.', 'warn'); return; }
+  saveS(); if (DRIVEF) driveSave(true); else toast('Esercizio “' + S.name + '” salvato');
+  if (!$('#drawer').hidden) renderEx();
+}
+function newExercise() { if (S.solids.length || S.name !== NONAME) exArchive(); loadExercise({ name: NONAME, solids: [newSolid('parallelepipedo')] }); toast('Nuovo esercizio'); }
+function exArchive() { const L = exList(); if (S.name !== NONAME && !L[S.name]) { L[S.name] = { savedAt: Date.now(), s: exSnap() }; try { localStorage.setItem(LSX, JSON.stringify(L)); } catch (_) { } } }
+
+// il foglio aperto, in coordinate del foglio (cm, origine nell'incrocio di LT e della linea verticale, v verso l'alto)
+const m2 = (n, u, w) => { const p = planeTo3(n, u, w, Math.PI / 2); return [p[0], p[2]]; };
+function hatchLines(P, gap) { // tratteggio a 45° dentro un poligono convesso
+  const out = [], c = P.map(p => p[0] - p[1]), c0 = Math.min(...c), c1 = Math.max(...c);
+  for (let k = Math.ceil(c0 / gap) * gap; k < c1; k += gap) {
+    const X = []; for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length], fa = a[0] - a[1] - k, fb = b[0] - b[1] - k; if ((fa <= 0 && fb > 0) || (fa > 0 && fb <= 0)) { const t = fa / (fa - fb); X.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]); } }
+    if (X.length >= 2) { X.sort((p, q) => p[0] - q[0]); out.push([X[0], X[X.length - 1]]); }
+  }
+  return out;
+}
+function sheetPrims() {
+  const { W, D, H, DL, M } = scene(), it = [], L = (a, b, st) => it.push({ t: 'line', a, b, st });
+  L([-W, 0], [DL, 0], 'lt'); L([0, -D], [0, H], 'lt'); // la croce che divide il foglio in quattro quadranti
+  if (PLANE) for (const [n, u0, u1, v0, v1] of [['PV', -W, 0, 0, H], ['PO', -W, 0, 0, D], ['PL', 0, DL, 0, H]]) { const tr = traceOn(n, u0, u1, v0, v1); if (tr) L(m2(n, ...tr[0]), m2(n, ...tr[1]), 'trace'); }
+  if (S.recall && CUT.length) {
+    const ks = CUT.flatMap(m => m.key), uq = a => [...new Set(a.map(v => v.toFixed(3)))].map(Number), X = uq(ks.map(p => p[0])), Y = uq(ks.map(p => p[1])), Z = uq(ks.map(p => p[2]));
+    const xmin = Math.min(...X), zmax = Math.max(...Z), ymax = Math.max(...Y);
+    for (const x of X) L([x, zmax], [x, -ymax], 'thin');
+    for (const z of Z) L([xmin, z], [ymax, z], 'thin');
+    for (const y of Y) { L([xmin, -y], [0, -y], 'thin'); if (y > 1e-6) it.push({ t: 'arc', r: y }); L([y, 0], [y, zmax], 'thin'); }
+  }
+  for (const name of ['PV', 'PO', 'PL']) {
+    const v = VIEWS[name];
+    for (const m of CUT) for (const f of m.F) if (f.cap && dot3(f.n, v.t) > 1e-6) { const Q = f.v.map(i => m2(name, ...v.to2(m.V[i]))); for (const [a, b] of hatchLines(Q, 0.3)) L(a, b, 'hatch'); }
+    for (const e of seen(name)) if (e.vis || S.hidden) L(m2(name, ...v.to2(e.A)), m2(name, ...v.to2(e.B)), e.vis ? 'vis' : 'hid');
+    for (const m of CUT) for (const [a, b] of axesOf(m, name)) L(m2(name, ...a), m2(name, ...b), 'axis');
+  }
+  if (S.labels) for (const [tx, p] of [['PV', m2('PV', -W + 0.9, H - 0.7)], ['PO', m2('PO', -W + 0.9, D - 0.7)], ['PL', m2('PL', DL - 0.9, H - 0.7)], ['LT', [-W + 0.6, 0.45]]]) it.push({ t: 'text', p, text: tx });
+  return { W, D, H, DL, M, items: it };
+}
+
+// PDF del foglio, in scala reale; dentro, nascosti, i dati per riaprire l'esercizio
+const APP_URL = /^https?:$/.test(location.protocol) && !/claude\.ai|claudeusercontent/.test(location.hostname) ? location.origin + location.pathname : 'https://giulitecnologia.github.io/tavola-viva/proiezioni.html';
+async function packData(o) {
+  const cs = new Blob([JSON.stringify(o)]).stream().pipeThrough(new CompressionStream('deflate-raw')), u8 = new Uint8Array(await new Response(cs).arrayBuffer());
+  let bin = ''; for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+async function unpackData(b64) {
+  const bin = atob(b64.replace(/-/g, '+').replace(/_/g, '/')), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return JSON.parse(await new Response(new Blob([u8]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text());
+}
+function sheetCanvas(k) {
+  const sp = sheetPrims(), { W, H, M } = sp, w = 2 * (W + M), h = 2 * (H + M), c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
+  const g = c.getContext('2d'), X = u => (u + W + M) * k, Y = v => (H + M - v) * k;
+  g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.lineCap = 'round';
+  g.strokeStyle = '#8f9a9e'; g.lineWidth = 1; g.strokeRect(0.5, 0.5, c.width - 1, c.height - 1); // bordo del foglio
+  g.strokeStyle = '#1c2126'; g.lineWidth = 0.06 * k; g.strokeRect(X(-W), Y(H), 2 * W * k, 2 * H * k); // squadratura
+  const ST = { vis: [0.05, '#111', []], hid: [0.03, '#222', [0.25, 0.15]], thin: [0.015, '#555', []], lt: [0.03, '#111', []], axis: [0.02, '#333', [0.6, 0.15, 0.1, 0.15]], trace: [0.03, SEC, [0.6, 0.15, 0.1, 0.15]], hatch: [0.015, '#444', []] };
+  for (const o of sp.items) {
+    if (o.t === 'line') { const [lw, col, da] = ST[o.st]; g.lineWidth = Math.max(1, lw * k); g.strokeStyle = col; g.setLineDash(da.map(d => d * k)); g.beginPath(); g.moveTo(X(o.a[0]), Y(o.a[1])); g.lineTo(X(o.b[0]), Y(o.b[1])); g.stroke(); }
+    else if (o.t === 'arc') { const [lw, col] = ST.thin; g.setLineDash([]); g.lineWidth = Math.max(1, lw * k); g.strokeStyle = col; g.beginPath(); g.arc(X(0), Y(0), o.r * k, 0, Math.PI / 2); g.stroke(); }
+    else if (o.t === 'text') { g.setLineDash([]); g.fillStyle = '#1c2126'; g.font = `700 ${0.45 * k}px ${getComputedStyle(document.body).fontFamily}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(o.text, X(o.p[0]), Y(o.p[1])); }
+  }
+  return { c, w, h };
+}
+function jpegBytes(c) { const d = atob(c.toDataURL('image/jpeg', 0.92).split(',')[1]), u = new Uint8Array(d.length); for (let i = 0; i < d.length; i++) u[i] = d.charCodeAt(i); return u; }
+function makePDF(p, data, link) { // una pagina con l'immagine del foglio, i dati nascosti e il pulsante «Apri nelle Proiezioni» (solo a schermo)
+  const enc = new TextEncoder(), parts = [], offs = []; let pos = 0;
+  const put = x => { const b = typeof x === 'string' ? enc.encode(x) : x; parts.push(b); pos += b.length; };
+  const obj = (id, body) => { offs[id] = pos; put(id + ' 0 obj\n'); body(); put('\nendobj\n'); };
+  const pt = cm => (cm * 72 / 2.54).toFixed(2), W = pt(p.w), H = pt(p.h), img = jpegBytes(p.c), cs = `q ${W} 0 0 ${H} 0 0 cm /Im0 Do Q`, btn = link ? 7 : 0;
+  put('%PDF-1.4\n%âãÏÓ\n');
+  obj(1, () => put('<< /Type /Catalog /Pages 2 0 R /Proiezioni 6 0 R >>'));
+  obj(2, () => put('<< /Type /Pages /Count 1 /Kids [3 0 R] >>'));
+  obj(3, () => put(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /XObject << /Im0 5 0 R >> >> /Contents 4 0 R${btn ? ' /Annots [7 0 R 8 0 R]' : ''} >>`));
+  obj(4, () => put(`<< /Length ${cs.length} >>\nstream\n${cs}\nendstream`));
+  obj(5, () => { put(`<< /Type /XObject /Subtype /Image /Width ${p.c.width} /Height ${p.c.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${img.length} >>\nstream\n`); put(img); put('\nendstream'); });
+  obj(6, () => { const t = `%PROIEZIONI-INIZIO\n${data}\n%PROIEZIONI-FINE`; put(`<< /Length ${t.length} >>\nstream\n${t}\nendstream`); });
+  if (btn) {
+    const label = 'Apri nelle Proiezioni', fs = 11, bw = 6.4, bh = 0.72, x0 = (p.w - bw) / 2, y0 = p.h - 0.14 - bh, R = `[${pt(x0)} ${pt(y0)} ${pt(x0 + bw)} ${pt(y0 + bh)}]`, BW = pt(bw), BH = pt(bh);
+    const mc = document.createElement('canvas').getContext('2d'); mc.font = `bold ${fs}px Arial, Helvetica, sans-serif`; const tw = mc.measureText(label).width;
+    const ap = `0.122 0.361 0.271 rg 0 0 ${BW} ${BH} re f BT /F1 ${fs} Tf 1 1 1 rg ${((bw * 72 / 2.54 - tw) / 2).toFixed(2)} ${((bh * 72 / 2.54 - fs * 0.72) / 2).toFixed(2)} Td (${label}) Tj ET`;
+    obj(7, () => put(`<< /Type /Annot /Subtype /Stamp /Rect ${R} /F 0 /Contents (${label}) /AP << /N 9 0 R >> >>`));
+    obj(8, () => put(`<< /Type /Annot /Subtype /Link /Rect ${R} /Border [0 0 0] /A << /S /URI /URI (${link}) >> >>`));
+    obj(9, () => put(`<< /Type /XObject /Subtype /Form /BBox [0 0 ${BW} ${BH}] /Resources << /Font << /F1 10 0 R >> >> /Length ${ap.length} >>\nstream\n${ap}\nendstream`));
+    obj(10, () => put('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>'));
+  }
+  const total = btn ? 11 : 7, xref = pos;
+  let x = `xref\n0 ${total}\n0000000000 65535 f \n`; for (let k = 1; k < total; k++) x += String(offs[k]).padStart(10, '0') + ' 00000 n \n';
+  put(x + `trailer\n<< /Size ${total} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+  return new Blob(parts, { type: 'application/pdf' });
+}
+async function exPDF(k) { if (S.name === NONAME) S.name = autoName(); const p = sheetCanvas(k || 60), data = await packData(exSnap()), link = APP_URL + '#esercizio=' + data; return makePDF(p, data, link.length < 1e6 ? link : null); }
+function downloadBlob(blob, name) { const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); toast('Download avviato: ' + name); }
+async function openBuf(buf) {
+  const t = new TextDecoder('latin1').decode(new Uint8Array(buf)), m = /%PROIEZIONI-INIZIO\n([A-Za-z0-9_-]+)\n%PROIEZIONI-FINE/.exec(t);
+  if (!m) { toast(/%TAVOLAVIVA-INIZIO/.test(t) ? 'Questa è una tavola: aprila in Tavola viva.' : 'Questo file non contiene un esercizio delle Proiezioni.', 'warn'); return false; }
+  try { const ok = loadExercise(await unpackData(m[1])); if (ok) toast('Aperto “' + S.name + '”'); return ok; } catch (_) { toast('Non sono riuscita a leggere l’esercizio.', 'warn'); return false; }
+}
+$('#fileIn').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) f.arrayBuffer().then(b => { if (openBuf(b)) closeEx(); }); });
+
+// Google Drive: nel Drive di chi salva, cartella «Tavola viva» → «Proiezioni»; permesso drive.file (solo i file creati dall'app)
+const GDRIVE_CLIENT_ID = '70316158627-hhilqjep07l70gf2i4vn1tap501tktnf.apps.googleusercontent.com';
+const GAPI = 'https://www.googleapis.com/drive/v3', GUP = 'https://www.googleapis.com/upload/drive/v3';
+let DRIVEF = null, DRIVE_LIST = null, gTok = null, gTokExp = 0, gClient = null, gWaiting = null, gFolder = null;
+function gisLoad() {
+  if (window.google && google.accounts && google.accounts.oauth2) return Promise.resolve();
+  return gisLoad.p || (gisLoad.p = new Promise((ok, ko) => { const sc = document.createElement('script'); sc.src = 'https://accounts.google.com/gsi/client'; sc.async = true; sc.onload = ok; sc.onerror = () => { gisLoad.p = null; ko(new Error('rete')); }; document.head.appendChild(sc); }));
+}
+function gToken() {
+  if (gTok && Date.now() < gTokExp - 60000) return Promise.resolve(gTok);
+  if (!(window.google && google.accounts && google.accounts.oauth2)) return Promise.reject(new Error('rete'));
+  if (!gClient) gClient = google.accounts.oauth2.initTokenClient({ client_id: GDRIVE_CLIENT_ID, scope: 'https://www.googleapis.com/auth/drive.file',
+    callback: r => { const w = gWaiting; gWaiting = null; if (!w) return; if (r && r.access_token) { gTok = r.access_token; gTokExp = Date.now() + (r.expires_in || 3600) * 1000; w.ok(gTok); } else w.ko(new Error(r && r.error || 'permesso')); },
+    error_callback: e => { const w = gWaiting; gWaiting = null; if (w) w.ko(new Error(e && e.type || 'annullato')); } });
+  return new Promise((ok, ko) => { gWaiting = { ok, ko }; gClient.requestAccessToken({ prompt: gTok ? '' : undefined }); });
+}
+async function gFetch(url, opt) {
+  const t = await gToken(), r = await fetch(url, Object.assign({}, opt, { headers: Object.assign({ Authorization: 'Bearer ' + t }, (opt && opt.headers) || {}) }));
+  if (r.status === 401) { gTok = null; throw new Error('scaduto'); }
+  if (!r.ok) throw new Error('drive ' + r.status);
+  return r;
+}
+async function gDir(name, parent) {
+  const q = encodeURIComponent(`mimeType='application/vnd.google-apps.folder' and name='${name}' and trashed=false` + (parent ? ` and '${parent}' in parents` : ''));
+  const l = await (await gFetch(`${GAPI}/files?q=${q}&fields=files(id)&spaces=drive`)).json();
+  if (l.files && l.files.length) return l.files[0].id;
+  const meta = { name, mimeType: 'application/vnd.google-apps.folder' }; if (parent) meta.parents = [parent];
+  return (await (await gFetch(`${GAPI}/files?fields=id`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(meta) })).json()).id;
+}
+const gFolderId = async () => gFolder || (gFolder = await gDir('Proiezioni', await gDir('Tavola viva')));
+const driveErr = e => toast(/rete/.test(e.message) ? 'Google Drive non raggiungibile: controlla la connessione.' : /annullato|popup|permesso|access_denied/.test(e.message) ? 'Accesso a Google Drive annullato.' : 'Google Drive non ha risposto: riprova, oppure scarica il PDF.', 'warn');
+async function driveSave(quiet) {
+  const tokP = gToken(); // subito, finché vale il tocco sul pulsante
+  try {
+    await tokP; const pdf = await exPDF(), name = safeName(S.name) + '.pdf';
+    if (DRIVEF) {
+      await gFetch(`${GUP}/files/${DRIVEF.id}?uploadType=media`, { method: 'PATCH', headers: { 'Content-Type': 'application/pdf' }, body: pdf });
+      if (DRIVEF.name !== name) { await gFetch(`${GAPI}/files/${DRIVEF.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) }); DRIVEF.name = name; }
+    } else {
+      const meta = { name, mimeType: 'application/pdf', parents: [await gFolderId()] }, b = 'proiezioni' + Date.now();
+      const body = new Blob([`--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${b}\r\nContent-Type: application/pdf\r\n\r\n`, pdf, `\r\n--${b}--`]);
+      const f = await (await gFetch(`${GUP}/files?uploadType=multipart&fields=id,name`, { method: 'POST', headers: { 'Content-Type': 'multipart/related; boundary=' + b }, body })).json();
+      DRIVEF = { id: f.id, name: f.name };
+    }
+    if (!$('#drawer').hidden) renderEx();
+    toast(quiet ? 'Esercizio “' + S.name + '” salvato, anche su Drive' : 'Salvato su Drive, in Tavola viva → Proiezioni: d’ora in poi Salva aggiorna anche Drive.');
+  } catch (e) { driveErr(e); }
+}
+async function driveList() {
+  const tokP = gToken();
+  try { await tokP; const fid = await gFolderId(), q = encodeURIComponent(`'${fid}' in parents and trashed=false`);
+    DRIVE_LIST = (await (await gFetch(`${GAPI}/files?q=${q}&orderBy=modifiedTime desc&pageSize=100&fields=files(id,name,modifiedTime)`)).json()).files || []; renderEx();
+  } catch (e) { driveErr(e); }
+}
+async function driveOpen(id) {
+  try { const buf = await (await gFetch(`${GAPI}/files/${id}?alt=media`)).arrayBuffer(), f = (DRIVE_LIST || []).find(d => d.id === id);
+    if (await openBuf(buf)) { if (f) DRIVEF = { id, name: f.name }; closeEx(); toast('Aperto “' + S.name + '” da Drive: Salva aggiornerà il file su Drive'); }
+  } catch (e) { driveErr(e); }
+}
+
+// Porta in Tavola viva: le tre viste diventano segni veri su un foglio di Tavola viva
+function toTavola() {
+  if (!CUT.length) { toast('Non ci sono solidi da portare sul foglio.', 'warn'); return; }
+  if (S.name === NONAME) S.name = autoName();
+  const sp = sheetPrims(), { W, H, M } = sp, X = u => Math.round((u + W + M) * 1000) / 1000, Y = v => Math.round((H + M - v) * 1000) / 1000, st = [];
+  const PEN = { vis: ['HB', false], hid: ['2H', true], thin: ['2H', false], lt: ['2H', false], axis: ['2H', true], trace: ['2H', true], hatch: ['2H', false] };
+  for (const o of sp.items) {
+    if (o.t === 'line') { const [pen, dash] = PEN[o.st]; st.push({ type: 'line', x1: X(o.a[0]), y1: Y(o.a[1]), x2: X(o.b[0]), y2: Y(o.b[1]), pen, dash }); }
+    else if (o.t === 'arc') st.push({ type: 'arc', cx: X(0), cy: Y(0), r: Math.round(o.r * 1000) / 1000, a0: 0, sw: Math.PI / 2, pen: '2H', dash: false });
+    else if (o.t === 'text') st.push({ type: 'label', x: X(o.p[0]), y: Y(o.p[1]), text: o.text });
+  }
+  try { localStorage.setItem('tavolaviva.importa', JSON.stringify({ name: S.name, sheet: { w: 2 * (W + M), h: 2 * (H + M), margin: M }, strokes: st })); }
+  catch (_) { toast('Non sono riuscita a preparare il foglio.', 'warn'); return; }
+  saveS(); location.href = 'index.html#importa';
+}
+
+// il pannello
+function renderEx() {
+  const L = exList(), names = Object.keys(L).sort((a, b) => L[b].savedAt - L[a].savedAt), when = t => new Date(t || 0).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' });
+  const item = (nm, dt, btns) => `<div class="item"><span class="nm">${esc(nm)}<br><span class="dt">${dt}</span></span>${btns}</div>`;
+  $('#dBody').innerHTML = `<div><span class="k">Esercizio aperto</span><div class="wrap"><input type="text" id="exName" value="${esc(S.name === NONAME ? '' : S.name)}" placeholder="${esc(autoName())}" aria-label="Nome dell’esercizio"><button class="btn primary" data-x="save">Salva</button></div>
+      <div class="wrap" style="margin-top:6px"><button class="btn" data-x="new">Nuovo esercizio</button></div>${DRIVEF ? '<div class="empty" style="margin-top:6px">Salva aggiorna anche il file su Drive.</div>' : ''}</div>
+    <div><span class="k">Google Drive</span><div class="wrap"><button class="btn primary" data-x="dsave">Salva su Drive</button><button class="btn" data-x="dopen">Apri da Drive</button></div>
+      ${DRIVE_LIST ? `<div class="list">${DRIVE_LIST.length ? DRIVE_LIST.map(d => item(d.name.replace(/\.pdf$/i, ''), when(d.modifiedTime), `<button class="btn" data-x="dget" data-v="${esc(d.id)}">Apri</button>`)).join('') : '<div class="empty">Ancora nessun esercizio su Drive.</div>'}</div>` : ''}</div>
+    <div><span class="k">Il foglio con le tre viste</span><div class="wrap"><button class="btn primary" data-x="pdf">Foglio in PDF</button><button class="btn primary" data-x="tav">Porta in Tavola viva</button></div></div>
+    <div><span class="k">Salvati in questo browser</span><div class="list">${names.length ? names.map(n => item(n, when(L[n].savedAt), `<button class="btn" data-x="open" data-v="${esc(n)}">Apri</button><button class="btn" data-x="del" data-v="${esc(n)}">Elimina</button>`)).join('') : '<div class="empty">Nessun esercizio salvato.</div>'}</div></div>
+    <details><summary>Altre opzioni</summary><div class="wrap"><button class="btn" data-x="file">Riapri un PDF salvato…</button></div></details>`;
+}
+function openEx() { gisLoad().catch(() => { }); renderEx(); $('#drawer').hidden = $('#backdrop').hidden = false; }
+function closeEx() { $('#drawer').hidden = $('#backdrop').hidden = true; }
+$('#exBtn').onclick = openEx; $('#dClose').onclick = closeEx; $('#backdrop').onclick = closeEx;
+$('#saveBtn').onclick = () => { gisLoad().catch(() => { }); exSave(); };
+$('#dBody').addEventListener('input', e => { if (e.target.id === 'exName') { S.name = e.target.value.trim() || NONAME; saveS(); } });
+$('#dBody').addEventListener('click', e => {
+  const b = e.target.closest('[data-x]'); if (!b) return; const x = b.dataset.x, v = b.dataset.v;
+  if (x === 'save') exSave();
+  else if (x === 'new') { newExercise(); renderEx(); }
+  else if (x === 'dsave') { if (S.name === NONAME) S.name = autoName(); driveSave(); }
+  else if (x === 'dopen') driveList();
+  else if (x === 'dget') driveOpen(v);
+  else if (x === 'pdf') exPDF(80).then(p => downloadBlob(p, safeName(S.name) + '.pdf'));
+  else if (x === 'tav') toTavola();
+  else if (x === 'open') { const L = exList(); if (L[v]) { exArchive(); loadExercise(Object.assign({}, L[v].s, { name: v })); closeEx(); toast('Aperto “' + v + '”'); } }
+  else if (x === 'del') { if (confirm('Eliminare “' + v + '” da questo browser?')) { const L = exList(); delete L[v]; localStorage.setItem(LSX, JSON.stringify(L)); renderEx(); } }
+  else if (x === 'file') $('#fileIn').click();
+});
+// esercizio arrivato dal pulsante «Apri nelle Proiezioni» di un PDF
+if (location.hash.startsWith('#esercizio=')) { const b64 = location.hash.slice(11); history.replaceState(null, '', location.pathname + location.search);
+  unpackData(b64).then(o => { exArchive(); if (loadExercise(o)) toast('Aperto “' + S.name + '”'); }, () => toast('Non sono riuscita ad aprire l’esercizio.', 'warn')); }
 setTimeout(() => { $('#hint').style.opacity = 0; setTimeout(() => $('#hint').hidden = true, 700); }, 7000);
-window.PR = { S, CAM, setOpen, changed, get CUT() { return CUT; }, get MESH() { return MESH; }, edgesSeen, VIEWS, seen: n => seen(n), proj, get DRAG() { return DRAG; } };
+window.PR = { exPrims: () => sheetPrims(), loadExercise, S, CAM, setOpen, changed, get CUT() { return CUT; }, get MESH() { return MESH; }, edgesSeen, VIEWS, seen: n => seen(n), proj, get DRAG() { return DRAG; } };
 })();
 </script>
 </body></html>

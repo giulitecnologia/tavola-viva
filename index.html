@@ -2043,6 +2043,7 @@ const GUIDA = [
   ['Proiezioni ortogonali (in prova)', [
     'Il pulsante <b>Proiezioni</b> in alto apre una pagina a parte con il <b>triedro di Monge</b>: solidi e gruppi di solidi, proiezioni su PV, PO e PL, sezioni e apertura dei piani fino al disegno sul foglio.',
     '<b>Un dito su un solido</b> lo sposta sul PO a scatti di mezzo centimetro (se lo porti sopra un altro solido ci si appoggia); in <b>Vista di fronte</b> lo alzi e lo abbassi. <b>Un dito sul vuoto</b> gira il triedro.',
+    'In alto, <b>Salva</b> ed <b>Esercizi</b>: esercizi con un nome, <b>Salva su Drive</b> (cartella Tavola viva → Proiezioni), <b>Foglio in PDF</b> 33 × 24 con le tre viste e <b>Porta in Tavola viva</b>, che mette le viste su un foglio nuovo per ripassarle, quotarle e salvarle come una tavola.',
     'È una sezione <b>in prova, non ancora definitiva</b>: può cambiare. Il pulsante <b>Tavola</b> riporta qui, e il lavoro sulla tavola resta com’era.']],
   ['Foglio', ['Formato (33×24, 48×33, A4, A3 o personalizzato), orientamento, quadretti o foglio bianco, squadratura e margine, agganci e colore dell’interfaccia.']],
   ['Salvare, aprire e scaricare', [
@@ -2298,7 +2299,7 @@ async function driveSave(quiet) {
 }
 async function driveList() {
   const tokP = gToken();
-  try { await tokP; const fid = await gFolderId(), q = encodeURIComponent(`'${fid}' in parents and trashed=false`);
+  try { await tokP; const fid = await gFolderId(), q = encodeURIComponent(`'${fid}' in parents and trashed=false and mimeType != 'application/vnd.google-apps.folder'`);
     DRIVE_LIST = ((await (await gFetch(`${GAPI}/files?q=${q}&orderBy=modifiedTime desc&pageSize=100&fields=files(id,name,modifiedTime)`)).json()).files || []);
     if (drawerKind) renderDrawer();
   } catch (e) { driveErr(e); }
@@ -2548,11 +2549,30 @@ window.addEventListener('pagehide', () => { clearTimeout(saveTimer); kvSet(LS.au
   }
   renderTop(); renderCtx();
   if (location.hash.startsWith('#tavola=')) { lsSet('tavolaviva.benvenuto', 1); openFromLink(); }
+  else if (location.hash === '#importa') { lsSet('tavolaviva.benvenuto', 1); importFromProj(); }
   else if (!lsGet('tavolaviva.benvenuto')) showWelcome();
 })();
 
 /* app installabile: sul sito si può installare come un'app e funziona anche senza internet */
 if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claude\.ai|claudeusercontent/.test(location.hostname)) navigator.serviceWorker.register('sw.js').catch(() => { });
+
+/* le tre viste portate qui dalle Proiezioni: diventano segni veri su un foglio nuovo (il foglio di prima resta in Tavole) */
+function importFromProj() {
+  history.replaceState(null, '', location.pathname + location.search);
+  let o = null; try { o = JSON.parse(localStorage.getItem('tavolaviva.importa')); localStorage.removeItem('tavolaviva.importa'); } catch (_) { }
+  if (!o || !Array.isArray(o.strokes)) return;
+  if (!D.example) archive(D);
+  const doc = freshDoc(D); doc.name = o.name || 'Proiezioni';
+  const big = Math.abs(o.sheet.w - 33) > 0.01 || Math.abs(o.sheet.h - 24) > 0.01;
+  Object.assign(doc.sheet, { fmt: big ? 'custom' : '33x24', orient: 'O', cw: o.sheet.w, ch: o.sheet.h, margin: o.sheet.margin, grid: false, frame: true });
+  doc.strokes = o.strokes.map(x => {
+    if (x.type !== 'label') return Object.assign({ id: uid() }, x);
+    const lt = { text: x.text, size: TXT_EM, bold: false };
+    return { id: uid(), type: 'text', text: x.text, x: r3(x.x - textW(lt) / 2), y: r3(x.y + CAP / 2), size: TXT_EM, bold: false, pen: 'HB', dash: false };
+  });
+  leaveExample(); FILEH = DRIVEF = FILEH_PREV = DRIVEF_PREV = null; loadDoc(doc); changed(); SAVED = '';
+  toast('Le proiezioni sono sul foglio: puoi ripassarle, quotarle e salvarle come una tavola.', 'long');
+}
 
 /* tavola arrivata dal pulsante «Apri in Tavola viva» di un file salvato */
 // (viene chiamata all'avvio, dopo aver ripreso l'ultimo lavoro, che così resta al sicuro nell'elenco Tavole)
