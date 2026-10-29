@@ -40,6 +40,8 @@ button{font:inherit;color:inherit}
 #cv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;cursor:grab}
 #beta{position:absolute;left:50%;top:10px;transform:translateX(-50%);display:flex;align-items:center;gap:10px;max-width:calc(100% - 24px);padding:8px 8px 8px 14px;border-radius:12px;background:#fbe9dc;border:1px solid #ecc9ae;color:#6d3510;font-size:14px;font-weight:600;box-shadow:0 4px 16px #0001;z-index:2}
 #beta button{min-height:36px;padding:0 12px;border:1px solid #ecc9ae;border-radius:9px;background:#fff;font-weight:700;cursor:pointer;color:#6d3510}
+#legend{position:absolute;left:12px;top:12px;max-width:min(300px,calc(100% - 24px));max-height:calc(100% - 70px);overflow:auto;padding:10px 12px;border-radius:12px;background:#fffffff2;border:1px solid var(--line);box-shadow:0 4px 18px #1d282b22;font-size:14px;line-height:1.4;pointer-events:none}
+#legend b.t{display:block;color:var(--accent);margin-bottom:4px}#legend .s{margin-top:6px}#legend .s:first-of-type{margin-top:0}#legend .n{font-weight:700}#legend .r{color:var(--muted);font-size:13px}
 #hint{position:absolute;left:12px;bottom:10px;transition:opacity .6s;padding:7px 11px;border-radius:10px;background:#ffffffe6;border:1px solid var(--line);font-size:13.5px;color:var(--muted);pointer-events:none;max-width:calc(100% - 24px)}
 
 /* opzioni a destra */
@@ -122,6 +124,7 @@ button{font:inherit;color:inherit}
   <main id="stage">
     <canvas id="cv" aria-label="Triedro di Monge con il solido e le sue proiezioni"></canvas>
     <div id="beta" role="status"><span>⚠ <b>Sezione in prova</b>: le proiezioni non sono ancora definitive e possono cambiare.</span><button id="betaOk">Ho capito</button></div>
+    <div id="legend" hidden aria-live="polite"></div>
     <div id="hint">Trascina un solido per spostarlo · trascina il vuoto per girare il triedro · due dita per ingrandire e spostare</div>
   </main>
 
@@ -136,6 +139,7 @@ button{font:inherit;color:inherit}
     <span class="k">Apertura</span>
     <input type="range" id="open" min="0" max="90" step="1" value="0" aria-label="Apertura dei piani in gradi">
     <span id="openV">0°</span>
+    <button class="btn" id="legBtn" title="Mostra o nascondi la legenda con le misure dei solidi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>Misure</button>
   </div>
 </div>
 
@@ -173,13 +177,13 @@ const KINDS = {
 };
 const defDims = k => Object.fromEntries(KINDS[k].dims.map(d => [d[0], d[2]]));
 const newSolid = (kind, o) => Object.assign({ kind, dims: { [kind]: defDims(kind) }, dPV: 2, dPL: 2, z0: 0, rot: 0 }, o || {});
-const S = { name: 'Esercizio senza nome', solids: [newSolid('parallelepipedo')], act: 0, open: 0, rays: true, hidden: true, solid: true, labels: true, recall: true, sheet: true,
+const S = { name: 'Esercizio senza nome', legend: false, solids: [newSolid('parallelepipedo')], act: 0, open: 0, rays: true, hidden: true, solid: true, labels: true, recall: true, sheet: true,
   sec: { on: false, type: 'oriz', pos: 3, ang: 30, cut: true } };
 try {
   const o = JSON.parse(localStorage.getItem('tavolaviva.proiezioni')) || {};
   if (o.solids) Object.assign(S, o); // versione attuale
   else if (o.kind) S.solids = [newSolid(o.kind, { dims: { [o.kind]: (o.dim || {})[o.kind] || defDims(o.kind) }, dPV: o.dPV ?? 2, dPL: o.dPL ?? 2, rot: o.rot || 0 })]; // versione precedente con un solo solido
-  for (const k of ['rays', 'hidden', 'solid', 'labels', 'recall']) if (k in o) S[k] = o[k];
+  for (const k of ['rays', 'hidden', 'solid', 'labels', 'recall', 'legend']) if (k in o) S[k] = o[k];
 } catch (_) { }
 S.open = 0; S.act = clamp(S.act || 0, 0, S.solids.length - 1);
 const saveS = () => { try { const { open, ...keep } = S; localStorage.setItem('tavolaviva.proiezioni', JSON.stringify(keep)); } catch (_) { } };
@@ -568,7 +572,25 @@ function addSolid(kind, where) {
   } else { ns.z0 = 0; ns.dPV = below.dPV; ns.dPL = Math.round((-Math.min(...xs)) * 100) / 100; } // a contatto, a sinistra
   S.solids.push(ns); S.act = S.solids.length - 1;
 }
-function changed() { saveS(); rebuild(); const sz = JSON.stringify(scene()); if (sz !== lastSize) { lastSize = sz; fit(); } renderSide(); draw(); } // la vista si riadatta solo se i piani cambiano davvero
+/* legenda delle misure, accanto al triedro (solo se attivata) */
+function renderLegend() {
+  const el = $('#legend'); el.hidden = !S.legend; $('#legBtn').classList.toggle('on', !!S.legend); if (!S.legend) return;
+  const c = v => fmt(v) + ' cm', rows = S.solids.map((sd, i) => {
+    const d = dimsOf(sd), r = [];
+    if (sd.kind === 'parallelepipedo') r.push(`base rettangolo ${fmt(d.a)} × ${fmt(d.b)} cm`, `altezza ${c(d.h)}`);
+    else if (sd.kind === 'cubo') r.push(`facce quadrate di lato ${c(d.l)}`);
+    else if (sd.kind === 'prisma3') r.push(`base triangolo equilatero di lato ${c(d.l)}`, `altezza ${c(d.h)}`);
+    else if (sd.kind === 'prisma6') r.push(`base esagono regolare di lato ${c(d.l)}`, `altezza ${c(d.h)}`);
+    else if (sd.kind === 'piramide') r.push(`base quadrato di lato ${c(d.l)}`, `altezza ${c(d.h)}`, `spigolo laterale ${c(Math.hypot(d.l / Math.SQRT2, d.h))}`, `apotema ${c(Math.hypot(d.l / 2, d.h))}`);
+    else if (sd.kind === 'cilindro') r.push(`base cerchio di diametro ${c(d.d)}`, `altezza ${c(d.h)}`);
+    else r.push(`base cerchio di diametro ${c(d.d)}`, `altezza ${c(d.h)}`, `apotema ${c(Math.hypot(d.d / 2, d.h))}`);
+    if (sd.rot) r.push(`ruotato di ${sd.rot}°`);
+    r.push(`<span class="r">da PV ${c(sd.dPV)} · da PL ${c(sd.dPL)}${sd.z0 ? ' · da PO ' + c(sd.z0) : ''}</span>`);
+    return `<div class="s"><span class="n">${i + 1} · ${KINDS[sd.kind].n}</span><br>${r.join('<br>')}</div>`;
+  });
+  el.innerHTML = `<b class="t">Misure</b>${rows.join('')}`;
+}
+function changed() { saveS(); rebuild(); renderLegend(); const sz = JSON.stringify(scene()); if (sz !== lastSize) { lastSize = sz; fit(); } renderSide(); draw(); } // la vista si riadatta solo se i piani cambiano davvero
 function topOfOthers(i, skip) { // il solido più alto fra quelli sotto l'impronta del solido i (skip: solidi da non considerare)
   const m = buildSolid(S.solids[i]), xs = m.V.map(p => p[0]), ys = m.V.map(p => p[1]); let top = 0;
   S.solids.forEach((o, j) => { if (j === i || (skip && skip.has(j))) return; const q = buildSolid(o), qx = q.V.map(p => p[0]), qy = q.V.map(p => p[1]); if (Math.max(...xs) > Math.min(...qx) && Math.min(...xs) < Math.max(...qx) && Math.max(...ys) > Math.min(...qy) && Math.min(...ys) < Math.max(...qy)) top = Math.max(top, q.z1); });
@@ -656,7 +678,7 @@ function moveDrag(q) {
   const ddPL = sd.dPL - st.dPL, ddPV = sd.dPV - st.dPV, dz = sd.z0 - st.z0;
   for (const j of DRAG.ride) { const o = S.solids[j], t = DRAG.start[j]; o.dPL = Math.max(0, t.dPL + ddPL); o.dPV = Math.max(0, t.dPV + ddPV); o.z0 = t.z0 + dz; }
   const key = [sd.dPL, sd.dPV, sd.z0].join();
-  if (key !== DRAG.key) { DRAG.key = key; rebuild(); renderSide(); draw(); }
+  if (key !== DRAG.key) { DRAG.key = key; rebuild(); renderSide(); renderLegend(); draw(); }
 }
 function endDrag() { DRAG = null; cv.style.cursor = ''; changed(); }
 function dragLabel() { // le distanze accanto al solido trascinato
@@ -694,7 +716,7 @@ cv.addEventListener('dblclick', () => { CAM.zoom = 1; CAM.px = CAM.py = 0; draw(
 
 $('#fsBtn').onclick = () => { const el = document.documentElement; try { document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen(); } catch (_) { } };
 new ResizeObserver(layout).observe(stage);
-rebuild(); lastSize = JSON.stringify(scene()); renderSide(); setOpen(0); layout();
+rebuild(); lastSize = JSON.stringify(scene()); renderSide(); renderLegend(); setOpen(0); layout();
 $('#betaOk').onclick = () => { $('#beta').hidden = true; try { sessionStorage.setItem('tavolaviva.betaok', '1'); } catch (_) { } }; // l'avviso ricompare a ogni nuova apertura del browser
 try { if (sessionStorage.getItem('tavolaviva.betaok')) $('#beta').hidden = true; } catch (_) { }
 /* ================= esercizi: salvare, Drive, PDF del foglio, Porta in Tavola viva ================= */
@@ -904,6 +926,7 @@ function renderEx() {
 }
 function openEx() { gisLoad().catch(() => { }); renderEx(); $('#drawer').hidden = $('#backdrop').hidden = false; }
 function closeEx() { $('#drawer').hidden = $('#backdrop').hidden = true; }
+$('#legBtn').onclick = () => { S.legend = !S.legend; saveS(); renderLegend(); };
 $('#exBtn').onclick = openEx; $('#dClose').onclick = closeEx; $('#backdrop').onclick = closeEx;
 $('#saveBtn').onclick = () => { gisLoad().catch(() => { }); exSave(); };
 $('#dBody').addEventListener('input', e => { if (e.target.id === 'exName') { S.name = e.target.value.trim() || NONAME; saveS(); } });
