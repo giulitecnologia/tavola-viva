@@ -42,6 +42,7 @@ button{font:inherit;color:inherit}
 #beta button{min-height:36px;padding:0 12px;border:1px solid #ecc9ae;border-radius:9px;background:#fff;font-weight:700;cursor:pointer;color:#6d3510}
 #legend{position:absolute;left:12px;top:12px;max-width:min(300px,calc(100% - 24px));max-height:calc(100% - 70px);overflow:auto;padding:10px 12px;border-radius:12px;background:#fffffff2;border:1px solid var(--line);box-shadow:0 4px 18px #1d282b22;font-size:14px;line-height:1.4;pointer-events:none}
 #legend b.t{display:block;color:var(--accent);margin-bottom:4px}#legend .s{margin-top:6px}#legend .s:first-of-type{margin-top:0}#legend .n{font-weight:700}#legend .r{color:var(--muted);font-size:13px}
+#warn{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);width:max-content;max-width:calc(100% - 24px);padding:10px 14px;border-radius:12px;background:#fde8e3;border:2px solid #d63a1f;color:#7a1d0c;font-size:15px;line-height:1.4;z-index:2;box-shadow:0 4px 18px #1d282b22}
 #hint{position:absolute;left:12px;bottom:10px;transition:opacity .6s;padding:7px 11px;border-radius:10px;background:#ffffffe6;border:1px solid var(--line);font-size:13.5px;color:var(--muted);pointer-events:none;max-width:calc(100% - 24px)}
 
 /* opzioni a destra */
@@ -125,6 +126,7 @@ button{font:inherit;color:inherit}
     <canvas id="cv" aria-label="Triedro di Monge con il solido e le sue proiezioni"></canvas>
     <div id="beta" role="status"><span>⚠ <b>Sezione in prova</b>: le proiezioni non sono ancora definitive e possono cambiare.</span><button id="betaOk">Ho capito</button></div>
     <div id="legend" hidden aria-live="polite"></div>
+    <div id="warn" hidden role="alert"></div>
     <div id="hint">Trascina un solido per spostarlo · trascina il vuoto per girare il triedro · due dita per ingrandire e spostare</div>
   </main>
 
@@ -356,15 +358,22 @@ function seen(name) { return VCACHE[name] || (VCACHE[name] = edgesSeen(CUT, VIEW
 // il foglio da disegno è quello di Tavola viva: 33 × 24 cm orizzontale, squadratura a 1 cm.
 // Aperti, i piani riempiono i quattro quadranti uguali dentro la squadratura (15,5 × 11 cm):
 // PV e PO larghi W, PL largo DL = W; PO profondo D e piani alti H, con D = H.
-// Cambiando le misure dei solidi non si muovono; se un solido non ci sta più, il foglio si allarga
-// mantenendo le proporzioni, e non torna mai più piccolo.
-const SHEET = { w: 33, h: 24, m: 1 }; let SHK = 1;
-function scene() {
-  const xs = MESH.flatMap(m => m.V.map(p => p[0])), ys = MESH.flatMap(m => m.V.map(p => p[1])), zs = MESH.flatMap(m => m.V.map(p => p[2]));
-  const W0 = SHEET.w / 2 - SHEET.m, H0 = SHEET.h / 2 - SHEET.m;
-  SHK = Math.max(SHK, (-Math.min(...xs) + 1) / W0, (Math.max(...ys) + 1) / H0, (Math.max(...zs) + 1) / H0);
-  const k = Math.ceil(SHK * 4) / 4, W = W0 * k, H = H0 * k;
-  return { W, D: H, H, DL: W, M: SHEET.m * k };
+// I piani hanno SEMPRE la misura del foglio vero: quello che sta nel triedro sta anche sul foglio dei ragazzi.
+// Se un solido sporge, i piani non si allargano: compare l'avviso rosso con quanto e da che parte.
+const SHEET = { w: 33, h: 24, m: 1 }, SHK = 1;
+function scene() { const W = SHEET.w / 2 - SHEET.m, H = SHEET.h / 2 - SHEET.m; return { W, D: H, H, DL: W, M: SHEET.m }; }
+function overflow() { // di quanto le proiezioni escono dai quadranti del foglio 33 × 24
+  if (!MESH.length) return [];
+  const { W, D, H } = scene(), xs = MESH.flatMap(m => m.V.map(p => p[0])), ys = MESH.flatMap(m => m.V.map(p => p[1])), zs = MESH.flatMap(m => m.V.map(p => p[2])), out = [];
+  const sx = -Math.min(...xs) - W, sy = Math.max(...ys) - D, sz = Math.max(...zs) - H;
+  if (sx > 0.005) out.push(`${fmt(sx)} cm a sinistra (troppo lontano da PL o troppo largo)`);
+  if (sy > 0.005) out.push(`${fmt(sy)} cm in profondità (troppo lontano da PV o troppo profondo)`);
+  if (sz > 0.005) out.push(`${fmt(sz)} cm in altezza`);
+  return out;
+}
+function renderWarn() {
+  const o = overflow(), el = $('#warn'); el.hidden = !o.length;
+  if (o.length) el.innerHTML = `<b>⚠ Non ci sta nel foglio 33 × 24.</b> Sporge di ${o.join(', ')}. Riduci le misure o avvicina i solidi a PV e PL.`;
 }
 let lastSize = '';
 
@@ -418,7 +427,9 @@ function planeQuad(W, D, H) { // il piano secante dentro il triedro
   return pts.sort((p, q) => Math.atan2(dot3(sub3(p, c), w), dot3(sub3(p, c), u)) - Math.atan2(dot3(sub3(q, c), w), dot3(sub3(q, c), u)));
 }
 
+let OUT = false;
 function render() {
+  OUT = overflow().length > 0;
   G.setTransform(DPR, 0, 0, DPR, 0, 0); G.clearRect(0, 0, CW, CH);
   const phi = S.open * DEG, { W, D, H, DL, M } = scene(), s = fitS * CAM.zoom, lw = Math.max(1.6, s * 0.06), thin = Math.max(1, s * 0.03), fs = clamp(s * 0.55, 13, 24);
   const P = (n, u, v) => planeTo3(n, u, v, phi), opened = S.open >= 89.5, ko = clamp((S.open - 35) / 50, 0, 1);
@@ -433,7 +444,7 @@ function render() {
   // i tre piani, lisci come sul foglio da disegno
   const planes = [['PV', [-W, 0, 0, H], 'rgba(255,255,255,.88)'], ['PO', [-W, 0, 0, D], 'rgba(250,252,251,.88)'], ['PL', [0, DL, 0, H], 'rgba(246,249,248,.88)']];
   for (const [n, [u0, u1, v0, v1], fill] of planes) {
-    poly3([[u0, v0], [u1, v0], [u1, v1], [u0, v1]].map(([u, v]) => P(n, u, v)), fill, rgba(TH.accent, .55), 1.4);
+    poly3([[u0, v0], [u1, v0], [u1, v1], [u0, v1]].map(([u, v]) => P(n, u, v)), fill, OUT ? '#d63a1f' : rgba(TH.accent, .55), OUT ? 2.6 : 1.4); // bordo rosso se qualcosa sporge
   }
   // il movimento dei piani: archi con la freccia
   if (S.open > 0.5 && S.open < 89.5) {
@@ -590,7 +601,7 @@ function renderLegend() {
   });
   el.innerHTML = `<b class="t">Misure</b>${rows.join('')}`;
 }
-function changed() { saveS(); rebuild(); renderLegend(); const sz = JSON.stringify(scene()); if (sz !== lastSize) { lastSize = sz; fit(); } renderSide(); draw(); } // la vista si riadatta solo se i piani cambiano davvero
+function changed() { saveS(); rebuild(); renderLegend(); renderWarn(); const sz = JSON.stringify(scene()); if (sz !== lastSize) { lastSize = sz; fit(); } renderSide(); draw(); } // la vista si riadatta solo se i piani cambiano davvero
 function topOfOthers(i, skip) { // il solido più alto fra quelli sotto l'impronta del solido i (skip: solidi da non considerare)
   const m = buildSolid(S.solids[i]), xs = m.V.map(p => p[0]), ys = m.V.map(p => p[1]); let top = 0;
   S.solids.forEach((o, j) => { if (j === i || (skip && skip.has(j))) return; const q = buildSolid(o), qx = q.V.map(p => p[0]), qy = q.V.map(p => p[1]); if (Math.max(...xs) > Math.min(...qx) && Math.min(...xs) < Math.max(...qx) && Math.max(...ys) > Math.min(...qy) && Math.min(...ys) < Math.max(...qy)) top = Math.max(top, q.z1); });
@@ -678,7 +689,7 @@ function moveDrag(q) {
   const ddPL = sd.dPL - st.dPL, ddPV = sd.dPV - st.dPV, dz = sd.z0 - st.z0;
   for (const j of DRAG.ride) { const o = S.solids[j], t = DRAG.start[j]; o.dPL = Math.max(0, t.dPL + ddPL); o.dPV = Math.max(0, t.dPV + ddPV); o.z0 = t.z0 + dz; }
   const key = [sd.dPL, sd.dPV, sd.z0].join();
-  if (key !== DRAG.key) { DRAG.key = key; rebuild(); renderSide(); renderLegend(); draw(); }
+  if (key !== DRAG.key) { DRAG.key = key; rebuild(); renderSide(); renderLegend(); renderWarn(); draw(); }
 }
 function endDrag() { DRAG = null; cv.style.cursor = ''; changed(); }
 function dragLabel() { // le distanze accanto al solido trascinato
@@ -716,7 +727,7 @@ cv.addEventListener('dblclick', () => { CAM.zoom = 1; CAM.px = CAM.py = 0; draw(
 
 $('#fsBtn').onclick = () => { const el = document.documentElement; try { document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen(); } catch (_) { } };
 new ResizeObserver(layout).observe(stage);
-rebuild(); lastSize = JSON.stringify(scene()); renderSide(); renderLegend(); setOpen(0); layout();
+rebuild(); lastSize = JSON.stringify(scene()); renderSide(); renderLegend(); renderWarn(); setOpen(0); layout();
 $('#betaOk').onclick = () => { $('#beta').hidden = true; try { sessionStorage.setItem('tavolaviva.betaok', '1'); } catch (_) { } }; // l'avviso ricompare a ogni nuova apertura del browser
 try { if (sessionStorage.getItem('tavolaviva.betaok')) $('#beta').hidden = true; } catch (_) { }
 /* ================= esercizi: salvare, Drive, PDF del foglio, Porta in Tavola viva ================= */
@@ -732,7 +743,7 @@ function loadExercise(o) { // riapre un esercizio salvato (dall'elenco, da un fi
   if (!o || !Array.isArray(o.solids) || !o.solids.length) { toast('Questo non è un esercizio delle Proiezioni.', 'warn'); return false; }
   S.solids = o.solids; S.sec = Object.assign({ on: false, type: 'oriz', pos: 3, ang: 30, cut: true }, o.sec || {}); S.name = o.name || NONAME;
   for (const k of ['rays', 'hidden', 'solid', 'labels', 'recall', 'sheet']) if (k in o) S[k] = o[k];
-  S.act = 0; SHK = 1; DRIVEF = null; ADDING = null; changed(); setOpen(0); return true;
+  S.act = 0; DRIVEF = null; ADDING = null; changed(); setOpen(0); return true;
 }
 function exSave() { // nell'elenco di questo browser (e su Drive, se l'esercizio è collegato)
   if (S.name === NONAME) S.name = autoName();
