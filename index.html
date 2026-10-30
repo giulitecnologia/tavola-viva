@@ -1580,7 +1580,7 @@ function placePoint(p) {
 /* ================= colore: secchiello e pastello ================= */
 // Il secchiello riempie la zona chiusa intorno al punto toccato: le linee fanno da bordo.
 // La zona è salvata come maschera (righe codificate a tratti) a 25 punti per centimetro, così si disegna e si stampa subito.
-const FILL_RES = 25;
+const FILL_RES = 50; // punti per cm: 0,2 mm, così il colore entra anche negli spazi stretti (anelli di 1 mm, circonferenze tangenti)
 function brushPath(pts, w, color) {
   G.setLineDash([]); G.lineWidth = w; G.lineCap = 'round'; G.lineJoin = 'round'; G.strokeStyle = color; G.beginPath();
   pts.forEach((q, i) => i ? G.lineTo(q[0], q[1]) : G.moveTo(q[0], q[1])); if (pts.length === 1) G.lineTo(pts[0][0] + 0.001, pts[0][1]); G.stroke();
@@ -1602,7 +1602,7 @@ function regionAt(p, all) {
   all = all ?? U.col.all;
   const R = FILL_RES, sh = D.sheet, { w, h } = sheetDims(sh), W = Math.ceil(w * R), H = Math.ceil(h * R);
   const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
-  g.setTransform(R, 0, 0, R, 0, 0); g.strokeStyle = '#000'; g.lineWidth = 1.6 / R; g.lineCap = 'round'; g.lineJoin = 'round'; g.beginPath();
+  g.setTransform(R, 0, 0, R, 0, 0); g.strokeStyle = '#000'; g.lineWidth = 1.2 / R; g.lineCap = 'round'; g.lineJoin = 'round'; g.beginPath();
   for (const s of D.strokes) {
     if (!all && s.pen === '2H' && s.type !== 'module') continue; // di norma la costruzione (2H) non fa da bordo
     if (s.type === 'line') { g.moveTo(s.x1, s.y1); g.lineTo(s.x2, s.y2); }
@@ -1618,14 +1618,14 @@ function regionAt(p, all) {
   for (const s of bd) {
     const ends = s.type === 'line' ? [{ x: s.x1, y: s.y1 }, { x: s.x2, y: s.y2 }] : s.type === 'arc' ? [arcPt(s, s.a0), arcPt(s, s.a0 + s.sw)] : [{ x: s.pts[0][0], y: s.pts[0][1] }, { x: s.pts.at(-1)[0], y: s.pts.at(-1)[1] }];
     for (const e of ends) {
-      let best = null, bdist = 0.4;
+      let best = null, bdist = 0.4, touch = Infinity;
       for (const t of tg) {
         if (t.own === s) continue; let q;
         if (t.cx !== undefined) { const v = { x: e.x - t.cx, y: e.y - t.cy }, l = Math.hypot(v.x, v.y); if (l < 1e-9) continue; q = { x: t.cx + v.x / l * t.r, y: t.cy + v.y / l * t.r }; if (!inArc(t, q)) q = [arcPt(t, t.a0), arcPt(t, t.a0 + t.sw)].sort((A, B) => dist(A, e) - dist(B, e))[0]; }
         else { const A = { x: t.x1, y: t.y1 }, ab = { x: t.x2 - t.x1, y: t.y2 - t.y1 }, l2 = ab.x * ab.x + ab.y * ab.y; if (l2 < 1e-12) continue; const k = clamp(((e.x - A.x) * ab.x + (e.y - A.y) * ab.y) / l2, 0, 1); q = { x: A.x + ab.x * k, y: A.y + ab.y * k }; }
-        const dd = dist(e, q); if (dd > 1e-4 && dd < bdist) { bdist = dd; best = q; }
+        const dd = dist(e, q); touch = Math.min(touch, dd); if (dd > 1e-4 && dd < bdist) { bdist = dd; best = q; }
       }
-      if (best) { g.moveTo(e.x, e.y); g.lineTo(best.x, best.y); }
+      if (best && touch > 0.02) { g.moveTo(e.x, e.y); g.lineTo(best.x, best.y); } // solo gli estremi davvero liberi: un arco che finisce già su una linea non va «chiuso» contro un'altra
     }
   }
   g.stroke();
