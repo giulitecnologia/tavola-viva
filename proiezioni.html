@@ -181,6 +181,7 @@ const defDims = k => Object.fromEntries(KINDS[k].dims.map(d => [d[0], d[2]]));
 const newSolid = (kind, o) => Object.assign({ kind, dims: { [kind]: defDims(kind) }, dPV: 2, dPL: 2, z0: 0, rot: 0 }, o || {});
 const S = { name: 'Esercizio senza nome', legend: false, solids: [newSolid('parallelepipedo')], act: 0, open: 0, rays: true, hidden: true, solid: true, labels: true, recall: true, sheet: true,
   sec: { on: false, type: 'oriz', pos: 3, ang: 30, cut: true } };
+if (location.hash === '#ripristina') { try { localStorage.removeItem('tavolaviva.proiezioni'); } catch (_) { } history.replaceState(null, '', location.pathname); }
 try {
   const o = JSON.parse(localStorage.getItem('tavolaviva.proiezioni')) || {};
   if (o.solids) Object.assign(S, o); // versione attuale
@@ -705,7 +706,7 @@ function dragLabel() { // le distanze accanto al solido trascinato
   const t = `da PV ${fmt(sd.dPV)} cm · da PL ${fmt(sd.dPL)} cm` + (sd.z0 > 0 ? ` · da PO ${fmt(sd.z0)} cm` : '');
   const fs = clamp(fitS * CAM.zoom * 0.5, 15, 22); G.font = `700 ${fs}px ${getComputedStyle(document.body).fontFamily}`;
   const w = G.measureText(t).width + 22, h = fs + 14, x = clamp(q[0] - w / 2, 6, CW - w - 6), y = clamp(q[1] - h - 14, 6, CH - h - 6);
-  G.setLineDash([]); G.fillStyle = 'rgba(255,255,255,.95)'; G.strokeStyle = TH.accent; G.lineWidth = 2; G.beginPath(); G.roundRect(x, y, w, h, 9); G.fill(); G.stroke();
+  G.setLineDash([]); G.fillStyle = 'rgba(255,255,255,.95)'; G.strokeStyle = TH.accent; G.lineWidth = 2; G.beginPath(); if (G.roundRect) G.roundRect(x, y, w, h, 9); else G.rect(x, y, w, h); G.fill(); G.stroke();
   G.fillStyle = INK; G.textAlign = 'center'; G.textBaseline = 'middle'; G.fillText(t, x + w / 2, y + h / 2 + 1);
 }
 const here = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
@@ -739,13 +740,15 @@ $('#betaOk').onclick = () => { $('#beta').hidden = true; try { sessionStorage.se
 try { if (sessionStorage.getItem('tavolaviva.betaok')) $('#beta').hidden = true; } catch (_) { }
 /* ================= esercizi: salvare, Drive, PDF del foglio, Porta in Tavola viva ================= */
 let toastT = 0;
+window.addEventListener('error', e => { try { toast('Qualcosa non ha funzionato: ' + (e.message || 'errore') + '. Se l’app non risponde, ricarica la pagina.', 'warn'); } catch (_) { } });
+window.addEventListener('unhandledrejection', e => { try { toast('Qualcosa non ha funzionato: ' + ((e.reason && e.reason.message) || 'errore') + '.', 'warn'); } catch (_) { } });
 function toast(msg, kind) { const el = $('#toast'); el.textContent = msg; el.className = 'show' + (kind ? ' ' + kind : ''); clearTimeout(toastT); toastT = setTimeout(() => el.className = '', kind === 'warn' ? 4200 : 2800); }
 const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 const safeName = t => (t || 'esercizio').replace(/[^\w\-àèéìòù ]+/gi, '').trim().replace(/\s+/g, '-') || 'esercizio';
 const LSX = 'tavolaviva.proiezioni.esercizi', NONAME = 'Esercizio senza nome';
-const exList = () => { try { return JSON.parse(localStorage.getItem(LSX)) || {}; } catch (_) { return {}; } };
+const exList = () => { try { const L = JSON.parse(localStorage.getItem(LSX)) || {}; for (const k in L) if (!L[k] || !L[k].s || !Array.isArray(L[k].s.solids)) delete L[k]; return L; } catch (_) { return {}; } }; // voci rovinate: si saltano
 const exSnap = () => { const { open, act, ...keep } = S; return JSON.parse(JSON.stringify(keep)); };
-const autoName = () => [...new Set(S.solids.map(sd => KINDS[sd.kind].n))].join(' e ') + (S.sec.on ? ' con sezione' : '');
+const autoName = () => [...new Set(S.solids.map(sd => (KINDS[sd.kind] || {}).n).filter(Boolean))].join(' e ') + (S.sec && S.sec.on ? ' con sezione' : '') || 'Esercizio';
 function loadExercise(o) { // riapre un esercizio salvato (dall'elenco, da un file, da Drive o dal pulsante del PDF)
   if (!o || !Array.isArray(o.solids) || !o.solids.length) { toast('Questo non è un esercizio delle Proiezioni.', 'warn'); return false; }
   S.solids = o.solids; S.sec = Object.assign({ on: false, type: 'oriz', pos: 3, ang: 30, cut: true }, o.sec || {}); S.name = o.name || NONAME;
@@ -990,7 +993,11 @@ function renderEx() {
     <div><span class="k">Salvati in questo browser</span><div class="list">${names.length ? names.map(n => item(n, when(L[n].savedAt), `<button class="btn" data-x="open" data-v="${esc(n)}">Apri</button><button class="btn" data-x="del" data-v="${esc(n)}">Elimina</button>`)).join('') : '<div class="empty">Nessun esercizio salvato.</div>'}</div></div>
     <details><summary>Altre opzioni</summary><div class="wrap"><button class="btn" data-x="file">Riapri un PDF salvato…</button></div></details>`;
 }
-function openEx() { gisLoad().catch(() => { }); renderEx(); $('#drawer').hidden = $('#backdrop').hidden = false; }
+function openEx() { // il pannello si apre comunque: se qualcosa va storto mostra l'errore invece di restare fermo
+  try { gisLoad().catch(() => { }); } catch (_) { }
+  try { renderEx(); } catch (e) { $('#dBody').innerHTML = `<div class="empty"><b>Qualcosa non ha funzionato nel pannello.</b><br>${esc(e && e.message || e)}</div><div class="wrap"><button class="btn" data-x="new">Nuovo esercizio</button></div>`; }
+  $('#drawer').hidden = $('#backdrop').hidden = false;
+}
 function closeEx() { $('#drawer').hidden = $('#backdrop').hidden = true; }
 $('#legBtn').onclick = () => { S.legend = !S.legend; saveS(); renderLegend(); };
 $('#exBtn').onclick = openEx; $('#dClose').onclick = closeEx; $('#backdrop').onclick = closeEx;
