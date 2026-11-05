@@ -395,7 +395,9 @@ function fit() { // il triedro, chiuso e aperto (e il foglio), deve stare tutto 
   const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
   SC = { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 }; fitS = Math.min((CW - 40) / (x1 - x0), (CH - 40) / (y1 - y0));
 }
-function layout() { const r = stage.getBoundingClientRect(); DPR = window.devicePixelRatio || 1; CW = r.width; CH = r.height; cv.width = Math.round(CW * DPR); cv.height = Math.round(CH * DPR); fit(); draw(); }
+// la tela non supera circa 2,5 milioni di punti: sulle LIM 4K (o con computer lenti) ridisegnare tutto lo schermo a piena densità impallava l'app
+const MAXPX = 1.8e6;
+function layout() { const r = stage.getBoundingClientRect(); CW = r.width; CH = r.height; DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, Math.sqrt(MAXPX / Math.max(1, CW * CH)))); cv.width = Math.round(CW * DPR); cv.height = Math.round(CH * DPR); fit(); draw(); }
 
 /* ---------- disegno ---------- */
 const INK = '#1c2126', THIN = '#7f8c98';

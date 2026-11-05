@@ -640,7 +640,7 @@ function inSheet(p) { const { w, h } = sheetDims(D.sheet); return p.x >= -1e-6 &
 const cv = $('#cv'), stage = $('#stage');
 let G = cv.getContext('2d'), DPR = 1, V = { s: 30, ox: 0, oy: 0 }, CW = 0, CH = 0;
 function layout() {
-  const r = stage.getBoundingClientRect(); DPR = window.devicePixelRatio || 1; CW = r.width; CH = r.height;
+  const r = stage.getBoundingClientRect(); CW = r.width; CH = r.height; DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, Math.sqrt(3e6 / Math.max(1, CW * CH)))); // al massimo circa 3 milioni di punti: sulle LIM 4K la tela a piena densità rallentava tutto
   cv.width = Math.round(CW * DPR); cv.height = Math.round(CH * DPR);
   const { w, h } = sheetDims((U.view >= 0 ? U.viewData : D).sheet), pad = 18, PR = CW > 700 ? PANEL_W + 12 : 0;
   const fit = Math.max(2, Math.min((CW - PR - 2 * pad) / w, (CH - 2 * pad) / h)), Z = U.zoom || 1, s = fit * Z;
