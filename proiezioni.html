@@ -786,7 +786,7 @@ function sheetPrims() {
   return { W, D, H, DL, M, items: it };
 }
 
-// PDF del foglio, in scala reale; dentro, nascosti, i dati per riaprire l'esercizio
+// PDF del foglio su A4 da stampare; dentro, nascosti, i dati per riaprire l'esercizio
 const APP_URL = /^https?:$/.test(location.protocol) && !/claude\.ai|claudeusercontent/.test(location.hostname) ? location.origin + location.pathname : 'https://giulitecnologia.github.io/tavola-viva/proiezioni.html';
 async function packData(o) {
   const cs = new Blob([JSON.stringify(o)]).stream().pipeThrough(new CompressionStream('deflate-raw')), u8 = new Uint8Array(await new Response(cs).arrayBuffer());
@@ -816,7 +816,9 @@ function makePDF(p, data, link) { // una pagina con l'immagine del foglio, i dat
   const enc = new TextEncoder(), parts = [], offs = []; let pos = 0;
   const put = x => { const b = typeof x === 'string' ? enc.encode(x) : x; parts.push(b); pos += b.length; };
   const obj = (id, body) => { offs[id] = pos; put(id + ' 0 obj\n'); body(); put('\nendobj\n'); };
-  const pt = cm => (cm * 72 / 2.54).toFixed(2), W = pt(p.w), H = pt(p.h), img = jpegBytes(p.c), cs = `q ${W} 0 0 ${H} 0 0 cm /Im0 Do Q`, btn = link ? 7 : 0;
+  // pagina A4 orizzontale: il foglio 33 × 24 si rimpicciolisce quanto basta per starci, con 5 mm di margine
+  const PW = p.w >= p.h ? 29.7 : 21, PH = p.w >= p.h ? 21 : 29.7, K = Math.min(1, (PW - 1) / p.w, (PH - 1) / p.h), OX = (PW - p.w * K) / 2, OY = (PH - p.h * K) / 2;
+  const pt = cm => (cm * 72 / 2.54).toFixed(2), W = pt(PW), H = pt(PH), img = jpegBytes(p.c), cs = `q ${pt(p.w * K)} 0 0 ${pt(p.h * K)} ${pt(OX)} ${pt(OY)} cm /Im0 Do Q`, btn = link ? 7 : 0;
   put('%PDF-1.4\n%âãÏÓ\n');
   obj(1, () => put('<< /Type /Catalog /Pages 2 0 R /Proiezioni 6 0 R >>'));
   obj(2, () => put('<< /Type /Pages /Count 1 /Kids [3 0 R] >>'));
@@ -825,7 +827,7 @@ function makePDF(p, data, link) { // una pagina con l'immagine del foglio, i dat
   obj(5, () => { put(`<< /Type /XObject /Subtype /Image /Width ${p.c.width} /Height ${p.c.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${img.length} >>\nstream\n`); put(img); put('\nendstream'); });
   obj(6, () => { const t = `%PROIEZIONI-INIZIO\n${data}\n%PROIEZIONI-FINE`; put(`<< /Length ${t.length} >>\nstream\n${t}\nendstream`); });
   if (btn) {
-    const label = 'Apri nelle Proiezioni', fs = 11, bw = 6.4, bh = 0.72, x0 = (p.w - bw) / 2, y0 = p.h - 0.14 - bh, R = `[${pt(x0)} ${pt(y0)} ${pt(x0 + bw)} ${pt(y0 + bh)}]`, BW = pt(bw), BH = pt(bh);
+    const label = 'Apri nelle Proiezioni', fs = 11, bw = 6.4, bh = 0.72, x0 = (PW - bw) / 2, y0 = OY + (p.h - 0.14) * K - bh, R = `[${pt(x0)} ${pt(y0)} ${pt(x0 + bw)} ${pt(y0 + bh)}]`, BW = pt(bw), BH = pt(bh);
     const mc = document.createElement('canvas').getContext('2d'); mc.font = `bold ${fs}px Arial, Helvetica, sans-serif`; const tw = mc.measureText(label).width;
     const ap = `0.122 0.361 0.271 rg 0 0 ${BW} ${BH} re f BT /F1 ${fs} Tf 1 1 1 rg ${((bw * 72 / 2.54 - tw) / 2).toFixed(2)} ${((bh * 72 / 2.54 - fs * 0.72) / 2).toFixed(2)} Td (${label}) Tj ET`;
     obj(7, () => put(`<< /Type /Annot /Subtype /Stamp /Rect ${R} /F 0 /Contents (${label}) /AP << /N 9 0 R >> >>`));

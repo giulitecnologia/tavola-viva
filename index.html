@@ -2054,7 +2054,7 @@ const GUIDA = [
     '<b>Il file è un PDF</b>: col doppio clic (o in Google Drive) si vede il disegno, pronto da stampare. Dentro ci sono anche i dati per modificarla: il pulsante verde <b>Apri in Tavola viva</b> in alto la riporta nell’app (serve internet; il pulsante non si stampa). Oppure, da Tavole, <b>Riapri un file salvato…</b> o <b>Apri da Drive</b>.',
     'Anche <b>Tavola in PDF</b> si può riaprire così. I file salvati prima (.html) si aprono ancora.',
     '<b>Scarica tutte le tavole</b>: un unico file con tutte le tavole e gli esempi. Aprendolo con Riapri un file salvato… in un altro profilo o computer, le ritrovi tutte nell’elenco.',
-    '<b>PDF</b> e <b>PNG</b> della tavola e dei passaggi, in scala reale.',
+    '<b>PDF</b> della tavola e dei passaggi su <b>foglio A4</b>, pronti da stampare: il disegno è rimpicciolito quanto basta per starci tutto. I <b>PNG</b> sono in scala reale.',
     'In Tavole trovi anche alcune <b>costruzioni preparate</b> da mostrare passo passo.']],
 ];
 const REPORT_MAIL = 'giulia.pinotti2024@smpavullo.com'; // segnalazioni dei colleghi: per toglierle, togliere il riquadro qui sotto
@@ -2206,7 +2206,7 @@ ${link ? `<a class="btn" href="${link}">${escH(opts.btn)}</a><p class="note">Ser
 ${opts.img ? `<img src="${opts.img}" alt="${escH(opts.title)}">` : ''}</main>
 <script type="application/json" id="tavola-viva-dati">${data}<\/script></body></html>`; // <\/script>: altrimenti chiuderebbe lo script della pagina
 }
-async function docPDF(o, k) { // la tavola in scala reale, con i dati per riaprirla
+async function docPDF(o, k) { // la tavola su A4, con i dati per riaprirla
   const { w, h } = sheetDims(o.sheet), data = await packData(o);
   return makePDF([{ c: renderToCanvas(o, k || Math.min(60, 2400 / Math.max(w, h))), w, h }], { data, link: await packLink(o, data) });
 }
@@ -2367,26 +2367,28 @@ function exportSteps() {
   });
   c.toBlob(b => b ? downloadBlob(b, safeName(D.name) + '-passaggi.png') : toast('Esportazione non riuscita', 'warn'), 'image/png');
 }
-// PDF in scala reale (1 cm = 1 cm), una pagina per immagine; scritto qui senza librerie esterne
+// PDF su A4 da stampare (il disegno rimpicciolito per starci), una pagina per immagine; scritto qui senza librerie esterne
 function jpegBytes(c) { const d = atob(c.toDataURL('image/jpeg', 0.92).split(',')[1]), u = new Uint8Array(d.length); for (let i = 0; i < d.length; i++) u[i] = d.charCodeAt(i); return u; }
 function makePDF(pages, extra) { // extra: { data, link } per il PDF della tavola
   const enc = new TextEncoder(), parts = [], offs = []; let pos = 0;
   const put = x => { const b = typeof x === 'string' ? enc.encode(x) : x; parts.push(b); pos += b.length; };
   const obj = (id, body) => { offs[id] = pos; put(id + ' 0 obj\n'); body(); put('\nendobj\n'); };
   const n = pages.length, pt = cm => (cm * 72 / 2.54).toFixed(2);
+  // pagina A4 (orizzontale o verticale come il foglio): il disegno si rimpicciolisce quanto basta per starci, con 5 mm di margine
+  const fitA4 = p => { const PW = p.w >= p.h ? 29.7 : 21, PH = p.w >= p.h ? 21 : 29.7, k = Math.min(1, (PW - 1) / p.w, (PH - 1) / p.h); return { PW, PH, k, ox: (PW - p.w * k) / 2, oy: (PH - p.h * k) / 2 }; };
   put('%PDF-1.4\n%âãÏÓ\n');
   const X = 3 + 3 * n, dataId = extra && extra.data ? X : 0, btn = extra && extra.link ? X + (dataId ? 1 : 0) : 0; // oggetti in più dopo le pagine
   obj(1, () => put(`<< /Type /Catalog /Pages 2 0 R${dataId ? ` /TavolaViva ${dataId} 0 R` : ''} >>`));
   obj(2, () => put(`<< /Type /Pages /Count ${n} /Kids [${pages.map((_, i) => (3 + 3 * i) + ' 0 R').join(' ')}] >>`));
   pages.forEach((p, i) => {
-    const W = pt(p.w), H = pt(p.h), img = jpegBytes(p.c), cs = `q ${W} 0 0 ${H} 0 0 cm /Im0 Do Q`;
+    const A = fitA4(p), W = pt(A.PW), H = pt(A.PH), img = jpegBytes(p.c), cs = `q ${pt(p.w * A.k)} 0 0 ${pt(p.h * A.k)} ${pt(A.ox)} ${pt(A.oy)} cm /Im0 Do Q`;
     obj(3 + 3 * i, () => put(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /XObject << /Im0 ${5 + 3 * i} 0 R >> >> /Contents ${4 + 3 * i} 0 R${btn && !i ? ` /Annots [${btn} 0 R ${btn + 1} 0 R]` : ''} >>`));
     obj(4 + 3 * i, () => put(`<< /Length ${cs.length} >>\nstream\n${cs}\nendstream`));
     obj(5 + 3 * i, () => { put(`<< /Type /XObject /Subtype /Image /Width ${p.c.width} /Height ${p.c.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${img.length} >>\nstream\n`); put(img); put('\nendstream'); });
   });
   if (dataId) obj(dataId, () => { const t = `%TAVOLAVIVA-INIZIO\n${extra.data}\n%TAVOLAVIVA-FINE`; put(`<< /Length ${t.length} >>\nstream\n${t}\nendstream`); });
   if (btn) { // «Apri in Tavola viva» nel margine in alto, al centro: si vede a schermo ma non si stampa
-    const p = pages[0], bw = 6.4, bh = 0.72, x0 = (p.w - bw) / 2, y0 = p.h - 0.14 - bh, R = `[${pt(x0)} ${pt(y0)} ${pt(x0 + bw)} ${pt(y0 + bh)}]`, BW = pt(bw), BH = pt(bh), fs = 11;
+    const p = pages[0], A = fitA4(p), bw = 6.4, bh = 0.72, x0 = (A.PW - bw) / 2, y0 = A.oy + (p.h - 0.14) * A.k - bh, R = `[${pt(x0)} ${pt(y0)} ${pt(x0 + bw)} ${pt(y0 + bh)}]`, BW = pt(bw), BH = pt(bh), fs = 11;
     const ap = `0.122 0.361 0.271 rg 0 0 ${BW} ${BH} re f BT /F1 ${fs} Tf 1 1 1 rg ${((bw * 72 / 2.54 - 97) / 2).toFixed(2)} ${((bh * 72 / 2.54 - fs * 0.72) / 2).toFixed(2)} Td (Apri in Tavola viva) Tj ET`;
     obj(btn, () => put(`<< /Type /Annot /Subtype /Stamp /Rect ${R} /F 0 /Contents (Apri in Tavola viva) /AP << /N ${btn + 2} 0 R >> >>`));
     obj(btn + 1, () => put(`<< /Type /Annot /Subtype /Link /Rect ${R} /Border [0 0 0] /A << /S /URI /URI (${extra.link}) >> >>`));
