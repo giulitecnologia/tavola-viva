@@ -380,7 +380,7 @@ function newDoc() {
 let D = newDoc();
 const COLORS = [['Rosso', '#e53935'], ['Arancio', '#fb8c00'], ['Giallo', '#fdd835'], ['Verde', '#43a047'], ['Azzurro', '#29b6f6'], ['Blu', '#1e66c9'], ['Viola', '#8e44ad'], ['Marrone', '#8d5a3b'], ['Grigio', '#8a9399']];
 const COLPREF = 'tavolaviva.colore';
-const U = { angGuide: (() => { try { return localStorage.getItem('tavolaviva.angoli') !== '0'; } catch (_) { return true; } })(), cg: null, radii: (() => { try { return JSON.parse(localStorage.getItem('tavolaviva.raggi')) || []; } catch (_) { return []; } })(), col: Object.assign({ mode: 'fill', color: '#29b6f6', alpha: 0.5, bw: 0.6, all: false }, (() => { try { return JSON.parse(localStorage.getItem(COLPREF)) || {}; } catch (_) { return {}; } })()), mode: 'sposta', pen: 'HB', dash: false, sel: null, selS: [], addSel: false, dotStyle: 'dot', dotLetter: false, lenMode: 'libera', lenVal: 10, view: -1, viewData: null, letter: 'punto', nextLetter: 'A', textSize: 0.5, hoverEdge: null };
+const U = { stepsPer: (() => { try { return +localStorage.getItem('tavolaviva.passaggiPerPagina') || 4; } catch (_) { return 4; } })(), angGuide: (() => { try { return localStorage.getItem('tavolaviva.angoli') !== '0'; } catch (_) { return true; } })(), cg: null, radii: (() => { try { return JSON.parse(localStorage.getItem('tavolaviva.raggi')) || []; } catch (_) { return []; } })(), col: Object.assign({ mode: 'fill', color: '#29b6f6', alpha: 0.5, bw: 0.6, all: false }, (() => { try { return JSON.parse(localStorage.getItem(COLPREF)) || {}; } catch (_) { return {}; } })()), mode: 'sposta', pen: 'HB', dash: false, sel: null, selS: [], addSel: false, dotStyle: 'dot', dotLetter: false, lenMode: 'libera', lenVal: 10, view: -1, viewData: null, letter: 'punto', nextLetter: 'A', textSize: 0.5, hoverEdge: null };
 
 /* ================= annulla / ripristina ================= */
 let undoS = [], redoS = [];
@@ -2055,6 +2055,7 @@ const GUIDA = [
     'Anche <b>Tavola in PDF</b> si può riaprire così. I file salvati prima (.html) si aprono ancora.',
     '<b>Scarica tutte le tavole</b>: un unico file con tutte le tavole e gli esempi. Aprendolo con Riapri un file salvato… in un altro profilo o computer, le ritrovi tutte nell’elenco.',
     '<b>PDF</b> della tavola e dei passaggi su <b>foglio A4</b>, pronti da stampare: il disegno è rimpicciolito quanto basta per starci tutto. I <b>PNG</b> sono in scala reale.',
+    '<b>Passaggi per pagina</b> (sotto Passaggi in PDF): 1, 4 o 6 passaggi in ogni foglio A4, ognuno con il suo numero.',
     'In Tavole trovi anche alcune <b>costruzioni preparate</b> da mostrare passo passo.']],
 ];
 const REPORT_MAIL = 'giulia.pinotti2024@smpavullo.com'; // segnalazioni dei colleghi: per toglierle, togliere il riquadro qui sotto
@@ -2103,7 +2104,8 @@ function boardsHTML() {
     ${DRIVEF || FILEH ? `<div class="empty">Salva aggiorna anche ${DRIVEF ? 'il file su Drive' : 'il file ' + esc(FILEH.name)}.</div>` : ''}</div>
   ${GDRIVE_CLIENT_ID ? `<div class="row"><span class="k">Google Drive</span><div class="wrap"><button class="btn primary" data-a="drivesave">Salva su Drive</button><button class="btn" data-a="driveopen">Apri da Drive</button></div>
     ${DRIVE_LIST ? `<div class="list">${DRIVE_LIST.length ? DRIVE_LIST.map(d => item(d.name.replace(/\.(pdf|html?)$/i, ''), when(d.modifiedTime), `<button class="btn" data-a="driveget" data-v="${esc(d.id)}">Apri</button>`)).join('') : '<div class="empty">Ancora nessuna tavola su Drive.</div>'}</div>` : ''}</div>` : ''}
-  <div class="row"><span class="k">Scarica</span><div class="wrap"><button class="btn primary" data-a="pdf">Tavola in PDF</button><button class="btn primary" data-a="pdfsteps">Passaggi in PDF</button></div></div>
+  <div class="row"><span class="k">Scarica</span><div class="wrap"><button class="btn primary" data-a="pdf">Tavola in PDF</button><button class="btn primary" data-a="pdfsteps">Passaggi in PDF</button></div>
+    <div class="wrap" style="margin-top:6px;align-items:center"><span class="empty" style="margin-right:4px">Passaggi per pagina:</span>${[1, 4, 6].map(n => `<button class="chip ${(U.stepsPer || 4) === n ? 'on' : ''}" data-a="stepsper" data-v="${n}">${n}</button>`).join('')}</div></div>
   <div class="row"><span class="k">Salvate in questo browser</span><div class="list">${names.length ? names.map(n => item(n, when(boards[n].savedAt) + ' · ' + (boards[n].doc.steps || []).length + ' passaggi', `<button class="btn" data-a="openlocal" data-v="${esc(n)}">Apri</button><button class="btn ghost" data-a="dellocal" data-v="${esc(n)}">Elimina</button>`)).join('') : '<div class="empty">Nessuna tavola salvata.</div>'}</div></div>
   <div class="row"><span class="k">Costruzioni preparate</span><div class="wrap"><button class="btn" data-a="sample" data-v="asse">Asse di un segmento</button><button class="btn" data-a="sample" data-v="triangolo">Triangolo equilatero inscritto</button><button class="btn" data-a="sample" data-v="esagono">Esagono regolare</button><button class="btn" data-a="sample" data-v="parallele">Parallele con due squadre</button></div>
     ${myEx.length ? `<span class="k" style="margin-top:6px">I tuoi esempi</span><div class="list">${myEx.map(n => item(n, (ex[n].steps || []).length + ' passaggi', `<button class="btn" data-a="myex" data-v="${esc(n)}">Apri</button><button class="btn ghost" data-a="delex" data-v="${esc(n)}">Elimina</button>`)).join('')}</div>` : ''}
@@ -2134,6 +2136,7 @@ $('#drawerBody').addEventListener('click', e => {
     case 'openlocal': { const bd = kvGet(LS.boards) || {}; if (bd[v]) { leaveExample(); FILEH = null; DRIVEF = null; loadDoc(bd[v].doc); D.example = false; changed(); closeDrawer(); toast('Aperta “' + v + '”'); } break; }
     case 'dellocal': confirmBox('Eliminare “' + v + '” da questo dispositivo?', 'Elimina', () => { const bd = kvGet(LS.boards) || {}; delete bd[v]; kvSet(LS.boards, bd); renderDrawer(); }); break;
     case 'saveasfile': saveAsFile(); break;
+    case 'stepsper': U.stepsPer = +v; try { localStorage.setItem('tavolaviva.passaggiPerPagina', v); } catch (_) { } renderDrawer(); break;
     case 'drivesave': driveSave(); break;
     case 'driveopen': driveList(); break;
     case 'driveget': driveOpen(v); break;
@@ -2407,6 +2410,8 @@ function exportStepsPDF() {
   const S = D.steps; if (!S.length) { toast('Non ci sono passaggi: registrali con “Segna passaggio”.', 'warn'); return; }
   toast('Preparo il PDF dei passaggi…');
   setTimeout(() => {
+    const per = U.stepsPer || 4;
+    if (per > 1) { downloadBlob(makePDF(stepsSheets(S, per)), safeName(D.name) + '-passaggi.pdf'); return; }
     const pages = S.map((st, i) => {
       const { w, h } = sheetDims(st.sheet), k = Math.min(60, 3000 / Math.max(w, h)), c = renderToCanvas(st, k, { tools: true }), g = c.getContext('2d');
       const m = Math.max(st.sheet.margin || 1, 0.6); // “Passaggio n di N” in alto al centro, nel margine
@@ -2415,6 +2420,27 @@ function exportStepsPDF() {
     });
     downloadBlob(makePDF(pages), safeName(D.name) + '-passaggi.pdf');
   }, 30);
+}
+// più passaggi in un foglio A4 orizzontale: 4 (2 × 2) o 6 (3 × 2), ognuno con il suo numero
+function stepsSheets(S, per) {
+  const K = 50, PW = 29.7, PH = 21, mg = 0.8, top = 1.3, gap = 0.5, lab = 0.75, cols = per === 6 ? 3 : 2, rows = 2;
+  const cw = (PW - 2 * mg - (cols - 1) * gap) / cols, d0 = sheetDims(S[0].sheet), ch = Math.min((PH - mg - top - (rows - 1) * gap) / rows, lab + cw * d0.h / d0.w); // righe alte quanto il foglio rimpicciolito
+  const y0 = top + Math.max(0, (PH - mg - top - (rows * ch + (rows - 1) * gap)) / 2), nP = Math.ceil(S.length / per), pages = [];
+  for (let p = 0; p < nP; p++) {
+    const c = document.createElement('canvas'); c.width = Math.round(PW * K); c.height = Math.round(PH * K); const g = c.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.textBaseline = 'middle';
+    g.fillStyle = '#1c2126'; g.font = `700 ${0.5 * K}px ${FONT_UI}`; g.textAlign = 'left'; g.fillText(D.name + ' · passaggi', mg * K, top / 2 * K);
+    g.fillStyle = '#5b6b6f'; g.font = `600 ${0.4 * K}px ${FONT_UI}`; g.textAlign = 'right'; g.fillText('pagina ' + (p + 1) + ' di ' + nP, (PW - mg) * K, top / 2 * K);
+    for (let j = 0; j < per; j++) {
+      const i = p * per + j; if (i >= S.length) break;
+      const st = S[i], x = mg + (j % cols) * (cw + gap), y = y0 + Math.floor(j / cols) * (ch + gap), { w, h } = sheetDims(st.sheet), sc = Math.min(cw / w, (ch - lab) / h);
+      const img = renderToCanvas(st, K * sc, { tools: true }), iw = w * sc, ih = h * sc, ix = x + (cw - iw) / 2, iy = y + lab;
+      g.fillStyle = ACC; g.font = `700 ${0.45 * K}px ${FONT_UI}`; g.textAlign = 'left'; g.fillText('Passaggio ' + (i + 1), ix * K, (y + lab * 0.45) * K);
+      g.drawImage(img, ix * K, iy * K, iw * K, ih * K); g.strokeStyle = '#8f9a9e'; g.lineWidth = 1; g.strokeRect(ix * K + 0.5, iy * K + 0.5, iw * K - 1, ih * K - 1);
+    }
+    pages.push({ c, w: PW, h: PH });
+  }
+  return pages;
 }
 function exportPNG() {
   const { w, h } = sheetDims(D.sheet), s = Math.min(60, 4200 / Math.max(w, h));
