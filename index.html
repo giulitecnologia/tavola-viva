@@ -2043,7 +2043,7 @@ const GUIDA = [
   ['Proiezioni ortogonali (in prova)', [
     'Il pulsante <b>Proiezioni</b> in alto apre una pagina a parte con il <b>triedro di Monge</b>: solidi e gruppi di solidi, proiezioni su PV, PO e PL, sezioni e apertura dei piani fino al disegno sul foglio.',
     '<b>Un dito su un solido</b> lo sposta sul PO a scatti di mezzo centimetro (se lo porti sopra un altro solido ci si appoggia); in <b>Vista di fronte</b> lo alzi e lo abbassi. <b>Un dito sul vuoto</b> gira il triedro.',
-    'In alto, <b>Salva</b> ed <b>Esercizi</b>: esercizi con un nome, <b>Salva su Drive</b> (cartella Tavola viva → Proiezioni), <b>Foglio in PDF</b> 33 × 24 con le tre viste e <b>Porta in Tavola viva</b>, che mette le viste su un foglio nuovo per ripassarle, quotarle e salvarle come una tavola.',
+    'In alto, <b>Salva</b> ed <b>Esercizi</b>: esercizi con un nome, <b>Salva su Drive</b> (cartella Tavola viva → Proiezioni), <b>Foglio in PDF</b> con le tre viste e le misure, <b>PDF consegna</b> (disegno dei solidi e misure, senza soluzione) o <b>Consegna e soluzione</b> da mettere su Classroom, e <b>Porta in Tavola viva</b>, che mette le viste su un foglio nuovo con i <b>passaggi già pronti</b>, vista per vista.',
     'È una sezione <b>in prova, non ancora definitiva</b>: può cambiare. Il pulsante <b>Tavola</b> riporta qui, e il lavoro sulla tavola resta com’era.']],
   ['Foglio', ['Formato (33×24, 48×33, A4, A3 o personalizzato), orientamento, quadretti o foglio bianco, squadratura e margine, agganci e colore dell’interfaccia.']],
   ['Salvare, aprire e scaricare', [
@@ -2598,8 +2598,11 @@ function importFromProj() {
     const lt = { text: x.text, size: TXT_EM, bold: false };
     return { id: uid(), type: 'text', text: x.text, x: r3(x.x - textW(lt) / 2), y: r3(x.y + CAP / 2), size: TXT_EM, bold: false, pen: 'HB', dash: false };
   });
+  // passaggi già pronti, vista per vista: 1 LT e quadranti, 2 PV, 3 richiami verso PO, 4 PO, 5 richiami e archi verso PL, 6 PL, 7 sezione
+  const phs = [...new Set(doc.strokes.map(x => x.ph || 1))].sort((a, b) => a - b);
+  doc.steps = phs.map(p => clone({ id: uid(), at: Date.now(), sheet: doc.sheet, header: doc.header, strokes: doc.strokes.filter(x => (x.ph || 1) <= p), tools: [] }));
   leaveExample(); FILEH = DRIVEF = FILEH_PREV = DRIVEF_PREV = null; loadDoc(doc); changed(); SAVED = '';
-  toast('Le proiezioni sono sul foglio: puoi ripassarle, quotarle e salvarle come una tavola.', 'long');
+  toast('Le proiezioni sono sul foglio, con ' + doc.steps.length + ' passaggi già pronti: premi Passaggi per rivederli.', 'long');
 }
 
 /* tavola arrivata dal pulsante «Apri in Tavola viva» di un file salvato */

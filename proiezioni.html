@@ -427,7 +427,7 @@ function planeQuad(W, D, H) { // il piano secante dentro il triedro
   return pts.sort((p, q) => Math.atan2(dot3(sub3(p, c), w), dot3(sub3(p, c), u)) - Math.atan2(dot3(sub3(q, c), w), dot3(sub3(q, c), u)));
 }
 
-let OUT = false;
+let OUT = false, CAPTURE = false; // CAPTURE: disegno per la consegna, senza le proiezioni sui piani
 function render() {
   OUT = overflow().length > 0;
   G.setTransform(DPR, 0, 0, DPR, 0, 0); G.clearRect(0, 0, CW, CH);
@@ -456,7 +456,7 @@ function render() {
   // linea di terra e spigoli del triedro
   line3([-W, 0, 0], [0, 0, 0], 2.2, INK); line3(P('PO', 0, 0), P('PO', 0, D), 1.6, rgba(TH.accent, .8)); line3(P('PL', 0, 0), P('PL', 0, H), 1.6, rgba(TH.accent, .8));
   // tracce del piano secante sui tre piani
-  if (PLANE) for (const [n, [u0, u1, v0, v1]] of planes) { const tr = traceOn(n, u0, u1, v0, v1); if (tr) { line3(P(n, ...tr[0]), P(n, ...tr[1]), 2.2, SEC, [14, 5, 3, 5]); text3(P(n, ...tr[1]), 't', SEC, fs * 0.8); } }
+  if (PLANE && !CAPTURE) for (const [n, [u0, u1, v0, v1]] of planes) { const tr = traceOn(n, u0, u1, v0, v1); if (tr) { line3(P(n, ...tr[0]), P(n, ...tr[1]), 2.2, SEC, [14, 5, 3, 5]); text3(P(n, ...tr[1]), 't', SEC, fs * 0.8); } }
   // linee di richiamo, a piani aperti
   if (opened && S.recall) {
     const ks = CUT.flatMap(m => m.key), uq = a => [...new Set(a.map(v => v.toFixed(3)))].map(Number), X = uq(ks.map(p => p[0])), Y = uq(ks.map(p => p[1])), Z = uq(ks.map(p => p[2]));
@@ -471,7 +471,7 @@ function render() {
     }
   }
   // proiezioni sui tre piani
-  for (const name of ['PV', 'PO', 'PL']) {
+  for (const name of CAPTURE ? [] : ['PV', 'PO', 'PL']) {
     const v = VIEWS[name];
     for (const m of CUT) poly3(hull(m.V.map(v.to2)).map(([u, w]) => P(name, u, w)), rgba(TH.accent, .14));
     for (const m of CUT) for (const f of m.F) if (f.cap && dot3(f.n, v.t) > 1e-6) { const Q = f.v.map(i => P(name, ...v.to2(m.V[i]))); poly3(Q, rgba(SEC, .12)); hatch3(Q, rgba(SEC, .85), Math.max(6, s * 0.28)); }
@@ -584,22 +584,27 @@ function addSolid(kind, where) {
   S.solids.push(ns); S.act = S.solids.length - 1;
 }
 /* legenda delle misure, accanto al triedro (solo se attivata) */
-function renderLegend() {
-  const el = $('#legend'); el.hidden = !S.legend; $('#legBtn').classList.toggle('on', !!S.legend); if (!S.legend) return;
-  const c = v => fmt(v) + ' cm', rows = S.solids.map((sd, i) => {
+function legendData() { // per ogni solido: nome, misure, posizione (testo semplice)
+  const c = v => fmt(v) + ' cm';
+  return S.solids.map((sd, i) => {
     const d = dimsOf(sd), r = [];
     if (sd.kind === 'parallelepipedo') r.push(`base rettangolo ${fmt(d.a)} × ${fmt(d.b)} cm`, `altezza ${c(d.h)}`);
     else if (sd.kind === 'cubo') r.push(`facce quadrate di lato ${c(d.l)}`);
     else if (sd.kind === 'prisma3') r.push(`base triangolo equilatero di lato ${c(d.l)}`, `altezza ${c(d.h)}`);
     else if (sd.kind === 'prisma6') r.push(`base esagono regolare di lato ${c(d.l)}`, `altezza ${c(d.h)}`);
     else if (sd.kind === 'piramide') r.push(`base quadrato di lato ${c(d.l)}`, `altezza ${c(d.h)}`);
-    else if (sd.kind === 'cilindro') r.push(`base cerchio di diametro ${c(d.d)}`, `altezza ${c(d.h)}`);
     else r.push(`base cerchio di diametro ${c(d.d)}`, `altezza ${c(d.h)}`);
     if (sd.rot) r.push(`ruotato di ${sd.rot}°`);
-    r.push(`<span class="r">da PV ${c(sd.dPV)} · da PL ${c(sd.dPL)}${sd.z0 ? ' · da PO ' + c(sd.z0) : ''}</span>`);
-    return `<div class="s"><span class="n">${i + 1} · ${KINDS[sd.kind].n}</span><br>${r.join('<br>')}</div>`;
+    return { title: `${i + 1} · ${KINDS[sd.kind].n}`, lines: r, pos: `da PV ${c(sd.dPV)} · da PL ${c(sd.dPL)}${sd.z0 ? ' · da PO ' + c(sd.z0) : ''}` };
   });
-  el.innerHTML = `<b class="t">Misure</b>${rows.join('')}`;
+}
+function secText() { // il piano secante, per la consegna
+  const sc = S.sec; if (!sc.on) return '';
+  return { oriz: `Sezione con un piano orizzontale a ${fmt(sc.pos)} cm da PO`, front: `Sezione con un piano frontale a ${fmt(sc.pos)} cm da PV`, lat: `Sezione con un piano laterale a ${fmt(sc.pos)} cm da PL`, incl: `Sezione con un piano perpendicolare a PV, inclinato di ${sc.ang}° su PO, alto ${fmt(sc.pos)} cm sull'asse` }[sc.type] || '';
+}
+function renderLegend() {
+  const el = $('#legend'); el.hidden = !S.legend; $('#legBtn').classList.toggle('on', !!S.legend); if (!S.legend) return;
+  el.innerHTML = `<b class="t">Misure</b>` + legendData().map(o => `<div class="s"><span class="n">${esc(o.title)}</span><br>${o.lines.map(esc).join('<br>')}<br><span class="r">${esc(o.pos)}</span></div>`).join('');
 }
 function changed() { saveS(); rebuild(); renderLegend(); renderWarn(); const sz = JSON.stringify(scene()); if (sz !== lastSize) { lastSize = sz; fit(); } renderSide(); draw(); } // la vista si riadatta solo se i piani cambiano davvero
 function topOfOthers(i, skip) { // il solido più alto fra quelli sotto l'impronta del solido i (skip: solidi da non considerare)
@@ -766,23 +771,24 @@ function hatchLines(P, gap) { // tratteggio a 45° dentro un poligono convesso
   return out;
 }
 function sheetPrims() {
-  const { W, D, H, DL, M } = scene(), it = [], L = (a, b, st) => it.push({ t: 'line', a, b, st });
+  const { W, D, H, DL, M } = scene(), it = []; let ph = 1; const L = (a, b, st) => it.push({ t: 'line', a, b, st, ph }); // ph: passaggio in cui il segno compare
   L([-W, 0], [DL, 0], 'lt'); L([0, -D], [0, H], 'lt'); // la croce che divide il foglio in quattro quadranti
-  if (PLANE) for (const [n, u0, u1, v0, v1] of [['PV', -W, 0, 0, H], ['PO', -W, 0, 0, D], ['PL', 0, DL, 0, H]]) { const tr = traceOn(n, u0, u1, v0, v1); if (tr) L(m2(n, ...tr[0]), m2(n, ...tr[1]), 'trace'); }
+  ph = 7; if (PLANE) for (const [n, u0, u1, v0, v1] of [['PV', -W, 0, 0, H], ['PO', -W, 0, 0, D], ['PL', 0, DL, 0, H]]) { const tr = traceOn(n, u0, u1, v0, v1); if (tr) L(m2(n, ...tr[0]), m2(n, ...tr[1]), 'trace'); }
   if (S.recall && CUT.length) {
     const ks = CUT.flatMap(m => m.key), uq = a => [...new Set(a.map(v => v.toFixed(3)))].map(Number), X = uq(ks.map(p => p[0])), Y = uq(ks.map(p => p[1])), Z = uq(ks.map(p => p[2]));
     const xmin = Math.min(...X), zmax = Math.max(...Z), ymax = Math.max(...Y);
-    for (const x of X) L([x, zmax], [x, -ymax], 'thin');
-    for (const z of Z) L([xmin, z], [ymax, z], 'thin');
-    for (const y of Y) { L([xmin, -y], [0, -y], 'thin'); if (y > 1e-6) it.push({ t: 'arc', r: y }); L([y, 0], [y, zmax], 'thin'); }
+    ph = 3; for (const x of X) L([x, zmax], [x, -ymax], 'thin'); // da PV verso PO
+    ph = 5; for (const z of Z) L([xmin, z], [ymax, z], 'thin'); // da PV verso PL
+    for (const y of Y) { L([xmin, -y], [0, -y], 'thin'); if (y > 1e-6) it.push({ t: 'arc', r: y, ph }); L([y, 0], [y, zmax], 'thin'); } // da PO verso PL con gli archi
   }
   for (const name of ['PV', 'PO', 'PL']) {
     const v = VIEWS[name];
-    for (const m of CUT) for (const f of m.F) if (f.cap && dot3(f.n, v.t) > 1e-6) { const Q = f.v.map(i => m2(name, ...v.to2(m.V[i]))); for (const [a, b] of hatchLines(Q, 0.3)) L(a, b, 'hatch'); }
+    ph = 7; for (const m of CUT) for (const f of m.F) if (f.cap && dot3(f.n, v.t) > 1e-6) { const Q = f.v.map(i => m2(name, ...v.to2(m.V[i]))); for (const [a, b] of hatchLines(Q, 0.3)) L(a, b, 'hatch'); }
+    ph = { PV: 2, PO: 4, PL: 6 }[name];
     for (const e of seen(name)) if (e.vis || S.hidden) L(m2(name, ...v.to2(e.A)), m2(name, ...v.to2(e.B)), e.vis ? 'vis' : 'hid');
     for (const m of CUT) for (const [a, b] of axesOf(m, name)) L(m2(name, ...a), m2(name, ...b), 'axis');
   }
-  if (S.labels) for (const [tx, p] of [['PV', m2('PV', -W + 0.9, H - 0.7)], ['PO', m2('PO', -W + 0.9, D - 0.7)], ['PL', m2('PL', DL - 0.9, H - 0.7)], ['LT', [-W + 0.6, 0.45]]]) it.push({ t: 'text', p, text: tx });
+  if (S.labels) for (const [tx, p] of [['PV', m2('PV', -W + 0.9, H - 0.7)], ['PO', m2('PO', -W + 0.9, D - 0.7)], ['PL', m2('PL', DL - 0.9, H - 0.7)], ['LT', [-W + 0.6, 0.45]]]) it.push({ t: 'text', p, text: tx, ph: 1 });
   return { W, D, H, DL, M, items: it };
 }
 
@@ -797,13 +803,20 @@ async function unpackData(b64) {
   const bin = atob(b64.replace(/-/g, '+').replace(/_/g, '/')), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
   return JSON.parse(await new Response(new Blob([u8]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text());
 }
-function sheetCanvas(k) {
+function sheetCanvas(k, legend) {
   const sp = sheetPrims(), { W, H, M } = sp, w = 2 * (W + M), h = 2 * (H + M), c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
   const g = c.getContext('2d'), X = u => (u + W + M) * k, Y = v => (H + M - v) * k;
   g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.lineCap = 'round';
   g.strokeStyle = '#8f9a9e'; g.lineWidth = 1; g.strokeRect(0.5, 0.5, c.width - 1, c.height - 1); // bordo del foglio
   g.strokeStyle = '#1c2126'; g.lineWidth = 0.06 * k; g.strokeRect(X(-W), Y(H), 2 * W * k, 2 * H * k); // squadratura
   const ST = { vis: [0.05, '#111', []], hid: [0.03, '#222', [0.25, 0.15]], thin: [0.015, '#555', []], lt: [0.03, '#111', []], axis: [0.02, '#333', [0.6, 0.15, 0.1, 0.15]], trace: [0.03, SEC, [0.6, 0.15, 0.1, 0.15]], hatch: [0.015, '#444', []] };
+  if (legend) { // le misure dei solidi nell'angolo in basso a destra del foglio
+    const L = legendData(), fs = 0.32 * k, lh = fs * 1.35, rowsN = L.reduce((t, o) => t + 2 + o.lines.length, 0) + 1, bw = 7.6 * k, bh = rowsN * lh + 0.3 * k, bx = X(W) - bw - 0.25 * k, by = Y(-H) - bh - 0.25 * k;
+    g.setLineDash([]); g.fillStyle = '#fff'; g.fillRect(bx, by, bw, bh); g.strokeStyle = '#8f9a9e'; g.lineWidth = Math.max(1, 0.015 * k); g.strokeRect(bx, by, bw, bh);
+    const ff = getComputedStyle(document.body).fontFamily; let y = by + 0.15 * k + lh / 2; g.textAlign = 'left'; g.textBaseline = 'middle';
+    const T = (t, b, col) => { g.font = `${b ? 700 : 400} ${fs}px ${ff}`; g.fillStyle = col || '#1c2126'; g.fillText(t, bx + 0.25 * k, y); y += lh; };
+    T('Misure dei solidi', true, TH.accent); for (const o of L) { T(o.title, true); for (const l of o.lines) T(l); T(o.pos, false, '#5b6b6f'); }
+  }
   for (const o of sp.items) {
     if (o.t === 'line') { const [lw, col, da] = ST[o.st]; g.lineWidth = Math.max(1, lw * k); g.strokeStyle = col; g.setLineDash(da.map(d => d * k)); g.beginPath(); g.moveTo(X(o.a[0]), Y(o.a[1])); g.lineTo(X(o.b[0]), Y(o.b[1])); g.stroke(); }
     else if (o.t === 'arc') { const [lw, col] = ST.thin; g.setLineDash([]); g.lineWidth = Math.max(1, lw * k); g.strokeStyle = col; g.beginPath(); g.arc(X(0), Y(0), o.r * k, 0, Math.PI / 2); g.stroke(); }
@@ -811,36 +824,71 @@ function sheetCanvas(k) {
   }
   return { c, w, h };
 }
+function capture3D() { // il triedro chiuso con i solidi, come nella Vista 3D, ritagliato
+  const keep = { open: S.open, rays: S.rays, yaw: CAM.yaw, pitch: CAM.pitch, zoom: CAM.zoom, px: CAM.px, py: CAM.py }, drag = DRAG;
+  S.open = 0; S.rays = false; Object.assign(CAM, { yaw: 38, pitch: 24, zoom: 1, px: 0, py: 0 }); DRAG = null; CAPTURE = true; B = basis(); fit(); render();
+  const W0 = cv.width, H0 = cv.height, px = G.getImageData(0, 0, W0, H0).data; let x0 = W0, y0 = H0, x1 = 0, y1 = 0;
+  for (let y = 0; y < H0; y += 2) for (let x = 0; x < W0; x += 2) if (px[(y * W0 + x) * 4 + 3] > 8) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  const pad = 10, cw = Math.max(1, x1 - x0 + 2 * pad), ch = Math.max(1, y1 - y0 + 2 * pad), c = document.createElement('canvas'); c.width = cw; c.height = ch;
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cw, ch); g.drawImage(cv, x0 - pad, y0 - pad, cw, ch, 0, 0, cw, ch);
+  CAPTURE = false; Object.assign(S, { open: keep.open, rays: keep.rays }); Object.assign(CAM, keep); delete CAM.open; delete CAM.rays; DRAG = drag; B = basis(); fit(); render();
+  return c;
+}
+function consegnaCanvas() { // pagina A4 orizzontale: il disegno dei solidi e le misure, senza la soluzione
+  const K = 50, PW = 29.7, PH = 21, mg = 1, c = document.createElement('canvas'); c.width = PW * K; c.height = PH * K; const g = c.getContext('2d'), ff = getComputedStyle(document.body).fontFamily;
+  g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.textBaseline = 'alphabetic'; g.textAlign = 'left';
+  g.fillStyle = '#1c2126'; g.font = `700 ${0.75 * K}px ${ff}`; g.fillText(S.name, mg * K, 1.6 * K);
+  g.fillStyle = TH.accent; g.font = `600 ${0.42 * K}px ${ff}`; g.fillText('Proiezioni ortogonali · consegna', mg * K, 2.35 * K);
+  g.fillStyle = '#1c2126'; g.font = `400 ${0.4 * K}px ${ff}`; g.fillText('Disegna sul foglio 33 × 24 le proiezioni dei solidi su PV, PO e PL, con le linee di richiamo.', mg * K, 3.1 * K);
+  const img = capture3D(), aw = 17.5, ah = PH - 4.2 - mg, sc = Math.min(aw * K / img.width, ah * K / img.height);
+  g.drawImage(img, mg * K, 3.7 * K, img.width * sc, img.height * sc);
+  let x = (mg + aw + 0.8) * K, y = 4.3 * K; const T = (t, sz, w, col, gapAfter) => { g.font = `${w} ${sz * K}px ${ff}`; g.fillStyle = col; g.fillText(t, x, y); y += (sz * 1.45 + (gapAfter || 0)) * K; };
+  T('Misure dei solidi', 0.5, 700, TH.accent, 0.15);
+  for (const o of legendData()) { T(o.title, 0.42, 700, '#1c2126'); for (const l of o.lines) T(l, 0.38, 400, '#1c2126'); T(o.pos, 0.34, 400, '#5b6b6f', 0.25); }
+  const st = secText(); if (st) { y += 0.1 * K; g.font = `700 ${0.38 * K}px ${ff}`; g.fillStyle = SEC; const words = st.split(' '); let line = ''; for (const w of words) { const t = line ? line + ' ' + w : w; if (g.measureText(t).width > (PW - mg) * K - x) { g.fillText(line, x, y); y += 0.55 * K; line = w; } else line = t; } if (line) g.fillText(line, x, y); }
+  return { c, w: PW, h: PH };
+}
 function jpegBytes(c) { const d = atob(c.toDataURL('image/jpeg', 0.92).split(',')[1]), u = new Uint8Array(d.length); for (let i = 0; i < d.length; i++) u[i] = d.charCodeAt(i); return u; }
-function makePDF(p, data, link) { // una pagina con l'immagine del foglio, i dati nascosti e il pulsante «Apri nelle Proiezioni» (solo a schermo)
+function makePDF(pagesIn, data, link) { // pagine A4 con le immagini, i dati nascosti e il pulsante «Apri nelle Proiezioni» (solo a schermo)
+  const P = Array.isArray(pagesIn) ? pagesIn : [pagesIn], n = P.length;
   const enc = new TextEncoder(), parts = [], offs = []; let pos = 0;
   const put = x => { const b = typeof x === 'string' ? enc.encode(x) : x; parts.push(b); pos += b.length; };
   const obj = (id, body) => { offs[id] = pos; put(id + ' 0 obj\n'); body(); put('\nendobj\n'); };
-  // pagina A4 orizzontale: il foglio 33 × 24 si rimpicciolisce quanto basta per starci, con 5 mm di margine
-  const PW = p.w >= p.h ? 29.7 : 21, PH = p.w >= p.h ? 21 : 29.7, K = Math.min(1, (PW - 1) / p.w, (PH - 1) / p.h), OX = (PW - p.w * K) / 2, OY = (PH - p.h * K) / 2;
-  const pt = cm => (cm * 72 / 2.54).toFixed(2), W = pt(PW), H = pt(PH), img = jpegBytes(p.c), cs = `q ${pt(p.w * K)} 0 0 ${pt(p.h * K)} ${pt(OX)} ${pt(OY)} cm /Im0 Do Q`, btn = link ? 7 : 0;
+  const pt = cm => (cm * 72 / 2.54).toFixed(2);
+  // pagina A4 nell'orientamento del foglio: il disegno si rimpicciolisce quanto basta per starci, con 5 mm di margine
+  const fit = p => { const PW = p.w >= p.h ? 29.7 : 21, PH = p.w >= p.h ? 21 : 29.7, K = Math.min(1, (PW - 1) / p.w, (PH - 1) / p.h); return { PW, PH, K, OX: (PW - p.w * K) / 2, OY: (PH - p.h * K) / 2 }; };
+  const btn = link ? 4 : 0, first = 4 + (btn ? 4 : 0), bp = Math.max(0, P.findIndex(p => p.btn)); // oggetti: 1 catalogo, 2 pagine, 3 dati, 4-7 pulsante, poi le pagine
   put('%PDF-1.4\n%âãÏÓ\n');
-  obj(1, () => put('<< /Type /Catalog /Pages 2 0 R /Proiezioni 6 0 R >>'));
-  obj(2, () => put('<< /Type /Pages /Count 1 /Kids [3 0 R] >>'));
-  obj(3, () => put(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /XObject << /Im0 5 0 R >> >> /Contents 4 0 R${btn ? ' /Annots [7 0 R 8 0 R]' : ''} >>`));
-  obj(4, () => put(`<< /Length ${cs.length} >>\nstream\n${cs}\nendstream`));
-  obj(5, () => { put(`<< /Type /XObject /Subtype /Image /Width ${p.c.width} /Height ${p.c.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${img.length} >>\nstream\n`); put(img); put('\nendstream'); });
-  obj(6, () => { const t = `%PROIEZIONI-INIZIO\n${data}\n%PROIEZIONI-FINE`; put(`<< /Length ${t.length} >>\nstream\n${t}\nendstream`); });
+  obj(1, () => put('<< /Type /Catalog /Pages 2 0 R /Proiezioni 3 0 R >>'));
+  obj(2, () => put(`<< /Type /Pages /Count ${n} /Kids [${P.map((_, i) => (first + 3 * i) + ' 0 R').join(' ')}] >>`));
+  obj(3, () => { const t = `%PROIEZIONI-INIZIO\n${data}\n%PROIEZIONI-FINE`; put(`<< /Length ${t.length} >>\nstream\n${t}\nendstream`); });
   if (btn) {
-    const label = 'Apri nelle Proiezioni', fs = 11, bw = 6.4, bh = 0.72, x0 = (PW - bw) / 2, y0 = OY + (p.h - 0.14) * K - bh, R = `[${pt(x0)} ${pt(y0)} ${pt(x0 + bw)} ${pt(y0 + bh)}]`, BW = pt(bw), BH = pt(bh);
-    const mc = document.createElement('canvas').getContext('2d'); mc.font = `bold ${fs}px Arial, Helvetica, sans-serif`; const tw = mc.measureText(label).width;
+    const p = P[bp], A = fit(p), label = 'Apri nelle Proiezioni', fs = 11, bw = 6.4, bh = 0.72, x0 = p.btn === 'right' ? A.PW - 0.5 - bw : (A.PW - bw) / 2, y0 = A.OY + (p.h - 0.14) * A.K - bh;
+    const R = `[${pt(x0)} ${pt(y0)} ${pt(x0 + bw)} ${pt(y0 + bh)}]`, BW = pt(bw), BH = pt(bh), mc = document.createElement('canvas').getContext('2d'); mc.font = `bold ${fs}px Arial, Helvetica, sans-serif`; const tw = mc.measureText(label).width;
     const ap = `0.122 0.361 0.271 rg 0 0 ${BW} ${BH} re f BT /F1 ${fs} Tf 1 1 1 rg ${((bw * 72 / 2.54 - tw) / 2).toFixed(2)} ${((bh * 72 / 2.54 - fs * 0.72) / 2).toFixed(2)} Td (${label}) Tj ET`;
-    obj(7, () => put(`<< /Type /Annot /Subtype /Stamp /Rect ${R} /F 0 /Contents (${label}) /AP << /N 9 0 R >> >>`));
-    obj(8, () => put(`<< /Type /Annot /Subtype /Link /Rect ${R} /Border [0 0 0] /A << /S /URI /URI (${link}) >> >>`));
-    obj(9, () => put(`<< /Type /XObject /Subtype /Form /BBox [0 0 ${BW} ${BH}] /Resources << /Font << /F1 10 0 R >> >> /Length ${ap.length} >>\nstream\n${ap}\nendstream`));
-    obj(10, () => put('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>'));
+    obj(4, () => put(`<< /Type /Annot /Subtype /Stamp /Rect ${R} /F 0 /Contents (${label}) /AP << /N 6 0 R >> >>`));
+    obj(5, () => put(`<< /Type /Annot /Subtype /Link /Rect ${R} /Border [0 0 0] /A << /S /URI /URI (${link}) >> >>`));
+    obj(6, () => put(`<< /Type /XObject /Subtype /Form /BBox [0 0 ${BW} ${BH}] /Resources << /Font << /F1 7 0 R >> >> /Length ${ap.length} >>\nstream\n${ap}\nendstream`));
+    obj(7, () => put('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>'));
   }
-  const total = btn ? 11 : 7, xref = pos;
+  P.forEach((p, i) => {
+    const A = fit(p), id = first + 3 * i, img = jpegBytes(p.c), cs = `q ${pt(p.w * A.K)} 0 0 ${pt(p.h * A.K)} ${pt(A.OX)} ${pt(A.OY)} cm /Im0 Do Q`;
+    obj(id, () => put(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pt(A.PW)} ${pt(A.PH)}] /Resources << /XObject << /Im0 ${id + 2} 0 R >> >> /Contents ${id + 1} 0 R${btn && i === bp ? ' /Annots [4 0 R 5 0 R]' : ''} >>`));
+    obj(id + 1, () => put(`<< /Length ${cs.length} >>\nstream\n${cs}\nendstream`));
+    obj(id + 2, () => { put(`<< /Type /XObject /Subtype /Image /Width ${p.c.width} /Height ${p.c.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${img.length} >>\nstream\n`); put(img); put('\nendstream'); });
+  });
+  const total = first + 3 * n, xref = pos;
   let x = `xref\n0 ${total}\n0000000000 65535 f \n`; for (let k = 1; k < total; k++) x += String(offs[k]).padStart(10, '0') + ' 00000 n \n';
   put(x + `trailer\n<< /Size ${total} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
   return new Blob(parts, { type: 'application/pdf' });
 }
-async function exPDF(k) { if (S.name === NONAME) S.name = autoName(); const p = sheetCanvas(k || 60), data = await packData(exSnap()), link = APP_URL + '#esercizio=' + data; return makePDF(p, data, link.length < 1e6 ? link : null); }
+// quali pagine: 'sol' il foglio con le tre viste (e le misure), 'con' la consegna, 'consol' consegna e soluzione
+async function exPDF(k, which) {
+  if (S.name === NONAME) S.name = autoName();
+  const sol = () => Object.assign(sheetCanvas(k || 60, true), { btn: 'center' }), con = () => Object.assign(consegnaCanvas(), { btn: 'right' });
+  const pages = which === 'con' ? [con()] : which === 'consol' ? [con(), sol()] : [sol()];
+  const data = await packData(exSnap()), link = APP_URL + '#esercizio=' + data; return makePDF(pages, data, link.length < 1e6 ? link : null);
+}
 function downloadBlob(blob, name) { const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); toast('Download avviato: ' + name); }
 async function openBuf(buf) {
   const t = new TextDecoder('latin1').decode(new Uint8Array(buf)), m = /%PROIEZIONI-INIZIO\n([A-Za-z0-9_-]+)\n%PROIEZIONI-FINE/.exec(t);
@@ -916,9 +964,9 @@ function toTavola() {
   const sp = sheetPrims(), { W, H, M } = sp, X = u => Math.round((u + W + M) * 1000) / 1000, Y = v => Math.round((H + M - v) * 1000) / 1000, st = [];
   const PEN = { vis: ['HB', false], hid: ['2H', true], thin: ['2H', false], lt: ['2H', false], axis: ['2H', true], trace: ['2H', true], hatch: ['2H', false] };
   for (const o of sp.items) {
-    if (o.t === 'line') { const [pen, dash] = PEN[o.st]; st.push({ type: 'line', x1: X(o.a[0]), y1: Y(o.a[1]), x2: X(o.b[0]), y2: Y(o.b[1]), pen, dash }); }
-    else if (o.t === 'arc') st.push({ type: 'arc', cx: X(0), cy: Y(0), r: Math.round(o.r * 1000) / 1000, a0: 0, sw: Math.PI / 2, pen: '2H', dash: false });
-    else if (o.t === 'text') st.push({ type: 'label', x: X(o.p[0]), y: Y(o.p[1]), text: o.text });
+    if (o.t === 'line') { const [pen, dash] = PEN[o.st]; st.push({ type: 'line', x1: X(o.a[0]), y1: Y(o.a[1]), x2: X(o.b[0]), y2: Y(o.b[1]), pen, dash, ph: o.ph }); }
+    else if (o.t === 'arc') st.push({ type: 'arc', cx: X(0), cy: Y(0), r: Math.round(o.r * 1000) / 1000, a0: 0, sw: Math.PI / 2, pen: '2H', dash: false, ph: o.ph });
+    else if (o.t === 'text') st.push({ type: 'label', x: X(o.p[0]), y: Y(o.p[1]), text: o.text, ph: o.ph });
   }
   try { localStorage.setItem('tavolaviva.importa', JSON.stringify({ name: S.name, sheet: { w: 2 * (W + M), h: 2 * (H + M), margin: M }, strokes: st })); }
   catch (_) { toast('Non sono riuscita a preparare il foglio.', 'warn'); return; }
@@ -933,7 +981,10 @@ function renderEx() {
       <div class="wrap" style="margin-top:6px"><button class="btn" data-x="new">Nuovo esercizio</button></div>${DRIVEF ? '<div class="empty" style="margin-top:6px">Salva aggiorna anche il file su Drive.</div>' : ''}</div>
     <div><span class="k">Google Drive</span><div class="wrap"><button class="btn primary" data-x="dsave">Salva su Drive</button><button class="btn" data-x="dopen">Apri da Drive</button></div>
       ${DRIVE_LIST ? `<div class="list">${DRIVE_LIST.length ? DRIVE_LIST.map(d => item(d.name.replace(/\.pdf$/i, ''), when(d.modifiedTime), `<button class="btn" data-x="dget" data-v="${esc(d.id)}">Apri</button>`)).join('') : '<div class="empty">Ancora nessun esercizio su Drive.</div>'}</div>` : ''}</div>
-    <div><span class="k">Il foglio con le tre viste</span><div class="wrap"><button class="btn primary" data-x="pdf">Foglio in PDF</button><button class="btn primary" data-x="tav">Porta in Tavola viva</button></div></div>
+    <div><span class="k">Per i ragazzi (da stampare o mettere su Classroom)</span><div class="wrap"><button class="btn primary" data-x="pdfcon">PDF consegna</button><button class="btn" data-x="pdfconsol">Consegna e soluzione</button></div>
+      <div class="empty" style="margin-top:6px">La consegna ha il disegno dei solidi e le loro misure, senza la soluzione.</div></div>
+    <div><span class="k">La soluzione: il foglio con le tre viste</span><div class="wrap"><button class="btn primary" data-x="pdf">Foglio in PDF</button><button class="btn primary" data-x="tav">Porta in Tavola viva</button></div>
+      <div class="empty" style="margin-top:6px">Porta in Tavola viva prepara anche i passaggi, vista per vista.</div></div>
     <div><span class="k">Salvati in questo browser</span><div class="list">${names.length ? names.map(n => item(n, when(L[n].savedAt), `<button class="btn" data-x="open" data-v="${esc(n)}">Apri</button><button class="btn" data-x="del" data-v="${esc(n)}">Elimina</button>`)).join('') : '<div class="empty">Nessun esercizio salvato.</div>'}</div></div>
     <details><summary>Altre opzioni</summary><div class="wrap"><button class="btn" data-x="file">Riapri un PDF salvato…</button></div></details>`;
 }
@@ -951,6 +1002,8 @@ $('#dBody').addEventListener('click', e => {
   else if (x === 'dopen') driveList();
   else if (x === 'dget') driveOpen(v);
   else if (x === 'pdf') exPDF(80).then(p => downloadBlob(p, safeName(S.name) + '.pdf'));
+  else if (x === 'pdfcon') exPDF(80, 'con').then(p => downloadBlob(p, safeName(S.name) + '-consegna.pdf'));
+  else if (x === 'pdfconsol') exPDF(80, 'consol').then(p => downloadBlob(p, safeName(S.name) + '-consegna-e-soluzione.pdf'));
   else if (x === 'tav') toTavola();
   else if (x === 'open') { const L = exList(); if (L[v]) { exArchive(); loadExercise(Object.assign({}, L[v].s, { name: v })); closeEx(); toast('Aperto “' + v + '”'); } }
   else if (x === 'del') { if (confirm('Eliminare “' + v + '” da questo browser?')) { const L = exList(); delete L[v]; localStorage.setItem(LSX, JSON.stringify(L)); renderEx(); } }
