@@ -38,8 +38,6 @@ button{font:inherit;color:inherit}
 /* area 3D */
 #stage{grid-row:2;grid-column:2;position:relative;overflow:hidden;min-width:0}
 #cv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;cursor:grab}
-#beta{position:absolute;left:50%;top:10px;transform:translateX(-50%);display:flex;align-items:center;gap:10px;max-width:calc(100% - 24px);padding:8px 8px 8px 14px;border-radius:12px;background:#fbe9dc;border:1px solid #ecc9ae;color:#6d3510;font-size:14px;font-weight:600;box-shadow:0 4px 16px #0001;z-index:2}
-#beta button{min-height:36px;padding:0 12px;border:1px solid #ecc9ae;border-radius:9px;background:#fff;font-weight:700;cursor:pointer;color:#6d3510}
 #legend{position:absolute;left:12px;top:12px;max-width:min(300px,calc(100% - 24px));max-height:calc(100% - 70px);overflow:auto;padding:10px 12px;border-radius:12px;background:#fffffff2;border:1px solid var(--line);box-shadow:0 4px 18px #1d282b22;font-size:14px;line-height:1.4;pointer-events:none}
 #legend b.t{display:block;color:var(--accent);margin-bottom:4px}#legend .s{margin-top:6px}#legend .s:first-of-type{margin-top:0}#legend .n{font-weight:700}#legend .r{color:var(--muted);font-size:13px}
 #warn{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);width:max-content;max-width:calc(100% - 24px);padding:10px 14px;border-radius:12px;background:#fde8e3;border:2px solid #d63a1f;color:#7a1d0c;font-size:15px;line-height:1.4;z-index:2;box-shadow:0 4px 18px #1d282b22}
@@ -101,7 +99,6 @@ button{font:inherit;color:inherit}
 <div id="app">
   <header id="top">
     <div class="brand"><svg class="logo" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 26a13 13 0 0 1 22 0" stroke-width="1.6" stroke-dasharray="2.5 2.5"/><path d="M16 4v3M16 7 9 26M16 7l7 19"/><circle cx="16" cy="8" r="2.2" fill="currentColor"/></svg><b>Tavola viva</b><span>· Proiezioni ortogonali</span></div>
-    <span class="test">In prova · non definitiva</span>
     <div class="spacer"></div>
     <button class="btn" id="saveBtn" title="Salva l’esercizio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg>Salva</button>
     <button class="btn" id="exBtn" title="Esercizi salvati, Google Drive, PDF del foglio, Porta in Tavola viva"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 6h6l2 2h8v11H4z"/></svg>Esercizi</button>
@@ -124,7 +121,6 @@ button{font:inherit;color:inherit}
 
   <main id="stage">
     <canvas id="cv" aria-label="Triedro di Monge con il solido e le sue proiezioni"></canvas>
-    <div id="beta" role="status"><span>⚠ <b>Sezione in prova</b>: le proiezioni non sono ancora definitive e possono cambiare.</span><button id="betaOk">Ho capito</button></div>
     <div id="legend" hidden aria-live="polite"></div>
     <div id="warn" hidden role="alert"></div>
     <div id="hint">Trascina un solido per spostarlo · trascina il vuoto per girare il triedro · due dita per ingrandire e spostare</div>
@@ -147,9 +143,10 @@ button{font:inherit;color:inherit}
 
 <script>
 /* se qualcosa si rompe, lo si vede: una barra rossa in alto con l'errore (utile per capire i problemi sui computer della scuola) */
-(() => { const show = m => { try { let b = document.getElementById('errbar'); if (!b) { b = document.createElement('div'); b.id = 'errbar'; b.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99;background:#b3261e;color:#fff;font:600 14px system-ui,sans-serif;padding:8px 12px;line-height:1.35'; (document.body || document.documentElement).appendChild(b); } b.textContent = '⚠ Errore: ' + m + ' — per ripartire apri ripara.html'; } catch (_) { } };
-  window.addEventListener('error', e => show((e.message || 'errore') + (e.lineno ? ' (riga ' + e.lineno + ')' : '')));
-  window.addEventListener('unhandledrejection', e => show((e.reason && e.reason.message) || String(e.reason))); })();
+(() => { const show = m => { try { let b = document.getElementById('errbar'); if (!b) { b = document.createElement('div'); b.id = 'errbar'; b.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99;background:#b3261e;color:#fff;font:600 14px system-ui,sans-serif;padding:8px 12px;line-height:1.35'; (document.body || document.documentElement).appendChild(b); } b.innerHTML = ''; b.append('⚠ ' + m + ' '); const l = document.createElement('a'); l.href = 'ripara.html'; l.textContent = 'Apri Ripara'; l.style.cssText = 'margin-left:10px;display:inline-block;background:#fff;color:#b3261e;border-radius:8px;padding:4px 12px;font-weight:700;text-decoration:none'; b.append(l); } catch (_) { } };
+  window.addEventListener('error', e => show('Errore: ' + (e.message || 'errore') + (e.lineno ? ' (riga ' + e.lineno + ')' : '') + '.'));
+  setTimeout(() => { if (!window.__tvPronta) show('L’app non si è avviata bene. Prova a ricaricare la pagina; se non basta:'); }, 8000); // se l'avvio non arriva in fondo
+  window.addEventListener('unhandledrejection', e => show('Errore: ' + ((e.reason && e.reason.message) || String(e.reason)) + '.')); })();
 </script>
 <script>
 (() => {
@@ -743,8 +740,6 @@ cv.addEventListener('dblclick', () => { CAM.zoom = 1; CAM.px = CAM.py = 0; draw(
 $('#fsBtn').onclick = () => { const el = document.documentElement; try { document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen(); } catch (_) { } };
 new ResizeObserver(layout).observe(stage);
 rebuild(); lastSize = JSON.stringify(scene()); renderSide(); renderLegend(); renderWarn(); setOpen(0); layout();
-$('#betaOk').onclick = () => { $('#beta').hidden = true; try { sessionStorage.setItem('tavolaviva.betaok', '1'); } catch (_) { } }; // l'avviso ricompare a ogni nuova apertura del browser
-try { if (sessionStorage.getItem('tavolaviva.betaok')) $('#beta').hidden = true; } catch (_) { }
 /* ================= esercizi: salvare, Drive, PDF del foglio, Porta in Tavola viva ================= */
 let toastT = 0;
 function toast(msg, kind) { const el = $('#toast'); el.textContent = msg; el.className = 'show' + (kind ? ' ' + kind : ''); clearTimeout(toastT); toastT = setTimeout(() => el.className = '', kind === 'warn' ? 4200 : 2800); }
@@ -1026,6 +1021,7 @@ $('#dBody').addEventListener('click', e => {
 if (location.hash.startsWith('#esercizio=')) { const b64 = location.hash.slice(11); history.replaceState(null, '', location.pathname + location.search);
   unpackData(b64).then(o => { exArchive(); if (loadExercise(o)) toast('Aperto “' + S.name + '”'); }, () => toast('Non sono riuscita ad aprire l’esercizio.', 'warn')); }
 setTimeout(() => { $('#hint').style.opacity = 0; setTimeout(() => $('#hint').hidden = true, 700); }, 7000);
+window.__tvPronta = true; // avvio completato
 window.PR = { exPrims: () => sheetPrims(), loadExercise, S, CAM, setOpen, changed, get CUT() { return CUT; }, get MESH() { return MESH; }, edgesSeen, VIEWS, seen: n => seen(n), proj, get DRAG() { return DRAG; } };
 })();
 </script>

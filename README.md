@@ -6,9 +6,9 @@ Tavola da disegno tecnico pensata per la LIM: foglio a quadretti con squadratura
 
 I disegni vengono salvati nel browser (localStorage) del dispositivo in uso. Per conservarli o trasferirli, usa "Tavole → Scarica file della tavola".
 
-## Proiezioni ortogonali (in prova)
+## Proiezioni ortogonali
 
-Dal pulsante **Proiezioni** si apre `proiezioni.html`, una pagina a parte con il triedro di Monge: solidi e gruppi di solidi, proiezioni su PV, PO e PL, sezioni e apertura dei piani fino al disegno sul foglio. È una sezione in prova, non ancora definitiva.
+Dal pulsante **Proiezioni** si apre `proiezioni.html`, una pagina a parte con il triedro di Monge: solidi e gruppi di solidi, proiezioni su PV, PO e PL, sezioni e apertura dei piani fino al disegno sul foglio.
 
 ## Installarla come app
 
