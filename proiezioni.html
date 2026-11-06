@@ -146,6 +146,12 @@ button{font:inherit;color:inherit}
 </div>
 
 <script>
+/* se qualcosa si rompe, lo si vede: una barra rossa in alto con l'errore (utile per capire i problemi sui computer della scuola) */
+(() => { const show = m => { try { let b = document.getElementById('errbar'); if (!b) { b = document.createElement('div'); b.id = 'errbar'; b.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99;background:#b3261e;color:#fff;font:600 14px system-ui,sans-serif;padding:8px 12px;line-height:1.35'; (document.body || document.documentElement).appendChild(b); } b.textContent = '⚠ Errore: ' + m + ' — per ripartire apri ripara.html'; } catch (_) { } };
+  window.addEventListener('error', e => show((e.message || 'errore') + (e.lineno ? ' (riga ' + e.lineno + ')' : '')));
+  window.addEventListener('unhandledrejection', e => show((e.reason && e.reason.message) || String(e.reason))); })();
+</script>
+<script>
 (() => {
 'use strict';
 const $ = s => document.querySelector(s);
@@ -740,8 +746,6 @@ $('#betaOk').onclick = () => { $('#beta').hidden = true; try { sessionStorage.se
 try { if (sessionStorage.getItem('tavolaviva.betaok')) $('#beta').hidden = true; } catch (_) { }
 /* ================= esercizi: salvare, Drive, PDF del foglio, Porta in Tavola viva ================= */
 let toastT = 0;
-window.addEventListener('error', e => { try { toast('Qualcosa non ha funzionato: ' + (e.message || 'errore') + '. Se l’app non risponde, ricarica la pagina.', 'warn'); } catch (_) { } });
-window.addEventListener('unhandledrejection', e => { try { toast('Qualcosa non ha funzionato: ' + ((e.reason && e.reason.message) || 'errore') + '.', 'warn'); } catch (_) { } });
 function toast(msg, kind) { const el = $('#toast'); el.textContent = msg; el.className = 'show' + (kind ? ' ' + kind : ''); clearTimeout(toastT); toastT = setTimeout(() => el.className = '', kind === 'warn' ? 4200 : 2800); }
 const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 const safeName = t => (t || 'esercizio').replace(/[^\w\-àèéìòù ]+/gi, '').trim().replace(/\s+/g, '-') || 'esercizio';

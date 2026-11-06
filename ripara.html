@@ -1,0 +1,61 @@
+<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ripara Tavola viva</title>
+<meta name="theme-color" content="#1f5c45">
+<link rel="icon" type="image/png" sizes="32x32" href="icone/favicon-32.png">
+<style>
+:root{--desk:#cdd9d2;--chrome:#f5f8f6;--ink:#1d282b;--muted:#5b6b6f;--line:#cbdad1;--accent:#1f5c45;color-scheme:light}
+body{margin:0;background:var(--desk);color:var(--ink);font:16px/1.5 "Avenir Next","Segoe UI","Helvetica Neue",system-ui,sans-serif}
+main{max-width:720px;margin:24px auto;padding:22px 20px 28px;background:var(--chrome);border:1px solid var(--line);border-radius:14px}
+@media (max-width:760px){main{margin:0;border-radius:0;border:0}}
+h1{margin:0 0 6px;font-size:24px;color:var(--accent)}h2{font-size:17px;margin:20px 0 4px}p{margin:4px 0 8px}
+button{font:inherit;font-weight:600;min-height:46px;padding:0 16px;border-radius:10px;border:1px solid var(--line);background:#fff;cursor:pointer}
+button.p{background:var(--accent);border-color:var(--accent);color:#fff}
+.ok{color:#1f5c45;font-weight:700}.muted{color:var(--muted);font-size:14px}
+pre{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:13px;white-space:pre-wrap;word-break:break-all}
+a{color:var(--accent)}
+</style></head>
+<body><main>
+<h1>Ripara Tavola viva</h1>
+<p>Se Tavola viva o le Proiezioni si bloccano in questo browser, prova questi pulsanti <b>in ordine</b>, e dopo ognuno riapri l’app. <b>Le tavole salvate non vengono toccate.</b></p>
+
+<h2>1 · Aggiorna l’app</h2>
+<p>Toglie la copia dell’app tenuta in memoria per funzionare senza internet, così si scarica di nuovo la versione più recente.</p>
+<button class="p" id="b1">Aggiorna l’app</button> <span id="r1"></span>
+
+<h2>2 · Riparti con un esercizio nuovo nelle Proiezioni</h2>
+<p>Toglie l’esercizio rimasto aperto nelle Proiezioni. Gli esercizi salvati nell’elenco restano.</p>
+<button class="p" id="b2">Esercizio nuovo</button> <span id="r2"></span>
+
+<h2>3 · Svuota l’elenco degli esercizi delle Proiezioni</h2>
+<p>Solo se i primi due non bastano. Prima scarica una copia, per non perderli.</p>
+<button id="b3a">Scarica una copia</button> <button id="b3">Svuota l’elenco</button> <span id="r3"></span>
+
+<p style="margin-top:22px"><a href="index.html">Apri Tavola viva</a> · <a href="proiezioni.html">Apri le Proiezioni</a></p>
+
+<h2>Per chi aiuta</h2>
+<p class="muted">Se il problema resta, fai una foto di questo riquadro e mandala.</p>
+<pre id="info">…</pre>
+</main>
+<script>
+(() => {
+  const $ = s => document.querySelector(s), done = (id, t) => { $(id).innerHTML = '<span class="ok">✓ ' + t + '</span>'; };
+  $('#b1').onclick = async () => {
+    try { if (navigator.serviceWorker) for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister(); if (window.caches) for (const k of await caches.keys()) await caches.delete(k); done('#r1', 'Fatto: ora riapri l’app'); }
+    catch (e) { $('#r1').textContent = 'Non riuscito: ' + e.message; } info();
+  };
+  $('#b2').onclick = () => { try { localStorage.removeItem('tavolaviva.proiezioni'); done('#r2', 'Fatto'); } catch (e) { $('#r2').textContent = 'Non riuscito: ' + e.message; } info(); };
+  $('#b3a').onclick = () => { const t = localStorage.getItem('tavolaviva.proiezioni.esercizi') || '{}', a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([t], { type: 'application/json' })); a.download = 'esercizi-proiezioni.json'; document.body.appendChild(a); a.click(); a.remove(); };
+  $('#b3').onclick = () => { if (!confirm('Svuotare l’elenco degli esercizi salvati nelle Proiezioni di questo browser?')) return; try { localStorage.removeItem('tavolaviva.proiezioni.esercizi'); done('#r3', 'Fatto'); } catch (e) { $('#r3').textContent = 'Non riuscito: ' + e.message; } info(); };
+  async function info() {
+    const L = [];
+    try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (/^tavolaviva/.test(k)) L.push(k + ': ' + (localStorage.getItem(k) || '').length + ' caratteri'); } } catch (e) { L.push('memoria del browser non accessibile: ' + e.message); }
+    let sw = 'no'; try { sw = navigator.serviceWorker ? (await navigator.serviceWorker.getRegistrations()).length + ' attivi' : 'non disponibile'; } catch (e) { sw = 'errore: ' + e.message; }
+    let cc = '-'; try { cc = window.caches ? (await caches.keys()).join(', ') || 'nessuna' : 'non disponibile'; } catch (e) { cc = 'errore: ' + e.message; }
+    let ex = '-'; try { const E = JSON.parse(localStorage.getItem('tavolaviva.proiezioni.esercizi') || '{}'); ex = Object.keys(E).length + ' esercizi'; } catch (e) { ex = 'elenco rovinato (' + e.message + ')'; }
+    let cur = '-'; try { const o = JSON.parse(localStorage.getItem('tavolaviva.proiezioni') || 'null'); cur = o ? (o.solids || []).map(s => s && s.kind).join(', ') || 'vuoto' : 'nessuno'; } catch (e) { cur = 'rovinato (' + e.message + ')'; }
+    $('#info').textContent = ['Browser: ' + navigator.userAgent, 'Copie offline: ' + sw + ' · memorie: ' + cc, 'Esercizio aperto nelle Proiezioni: ' + cur, 'Elenco esercizi: ' + ex, ...L].join('\n');
+  }
+  info();
+})();
+</script>
+</body></html>
