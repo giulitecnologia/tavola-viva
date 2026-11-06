@@ -156,7 +156,8 @@ button{font:inherit;color:inherit}
 'use strict';
 const $ = s => document.querySelector(s);
 const DEG = Math.PI / 180, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const fmt = v => (Math.round(v * 100) / 100).toString().replace('.', ','); // fino ai centesimi: i numeri mostrati sono quelli veri
+const fmt = v => (Math.round(v * 100) / 100).toString().replace('.', ',');
+const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); // definita qui in cima: la usa anche la legenda, che si disegna già all'apertura // fino ai centesimi: i numeri mostrati sono quelli veri
 
 /* ---------- tema, lo stesso scelto nella tavola ---------- */
 const THEMES = {
@@ -747,7 +748,6 @@ try { if (sessionStorage.getItem('tavolaviva.betaok')) $('#beta').hidden = true;
 /* ================= esercizi: salvare, Drive, PDF del foglio, Porta in Tavola viva ================= */
 let toastT = 0;
 function toast(msg, kind) { const el = $('#toast'); el.textContent = msg; el.className = 'show' + (kind ? ' ' + kind : ''); clearTimeout(toastT); toastT = setTimeout(() => el.className = '', kind === 'warn' ? 4200 : 2800); }
-const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 const safeName = t => (t || 'esercizio').replace(/[^\w\-àèéìòù ]+/gi, '').trim().replace(/\s+/g, '-') || 'esercizio';
 const LSX = 'tavolaviva.proiezioni.esercizi', NONAME = 'Esercizio senza nome';
 const exList = () => { try { const L = JSON.parse(localStorage.getItem(LSX)) || {}; for (const k in L) if (!L[k] || !L[k].s || !Array.isArray(L[k].s.solids)) delete L[k]; return L; } catch (_) { return {}; } }; // voci rovinate: si saltano
