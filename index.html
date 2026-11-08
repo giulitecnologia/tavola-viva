@@ -894,7 +894,6 @@ function paintOverlay() {
   if (U.hoverEdge && !(gst && gst.type !== 'edge')) hiEdge(U.hoverEdge, HI);
   if (gst && gst.snapEdges) { hiEdge(gst.snapEdges[0], SNAPC); hiEdge(gst.snapEdges[1], SNAPC); }
   if (gst && gst.refLine) hiEdge(gst.refLine, SNAPC); // segmento di riferimento per parallele e perpendicolari
-  if (U.dimPend && !(gst && gst.prev && gst.prev.kind === 'dim')) { G.save(); G.globalAlpha = 0.55; paintDim(dimFrom(U.dimPend.A, U.dimPend.B)); G.restore(); dotAt(U.dimPend.A, ACC); dotAt(U.dimPend.B, ACC); }
   if (!gst) return;
   if (gst.guides) for (const gd of gst.guides) { // linee guida di allineamento, come in Canva
     const a = toScr(gd.a), b = toScr(gd.b); setS(); G.save(); G.strokeStyle = GUIDE; G.lineWidth = 1.6; G.setLineDash([7, 5]);
@@ -907,8 +906,9 @@ function paintOverlay() {
     G.beginPath(); G.moveTo(pv.A.x, pv.A.y); G.lineTo(pv.B.x, pv.B.y); G.stroke(); G.setLineDash([]);
     dotAt(pv.A, ACC);
     const mid = mul(add(pv.A, pv.B), 0.5), dir = unit(sub(pv.B, pv.A)), nrm = { x: dir.y, y: -dir.x };
-    const side = gst.type === 'edge' ? gst.obj.n : nrm;
-    const lp = add(mid, mul(side, 32 / V.s));
+    // la matita sta in alto a destra della punta: la lunghezza va dall'altra parte del segmento
+    const side = gst.type === 'edge' ? gst.obj.n : (nrm.x - nrm.y > 0 ? mul(nrm, -1) : nrm);
+    const lp = add(mid, mul(side, 34 / V.s));
     measureTag(pv.err ? pv.err : fmt(pv.len) + ' cm' + (U.lenMode === 'precisa' ? '' : ''), lp, !!pv.err);
   }
   if (pv && pv.kind === 'arc') {
@@ -921,7 +921,11 @@ function paintOverlay() {
   if (pv && pv.kind === 'line') pencilAt(pv.B);
   else if (pv && pv.kind === 'free') pencilAt({ x: pv.pts[pv.pts.length - 1][0], y: pv.pts[pv.pts.length - 1][1] });
   else if (gst.type === 'edge') pencilAt(add(gst.obj.a, mul(gst.obj.d, gst.u0)));
-  if (gst.label) measureTag(gst.label.text, gst.label.at, false);
+  if (gst.label) { // l'angolo del segmento: dietro il punto di partenza, sul prolungamento, così non tocca né la misura né la matita
+    let at = gst.label.at;
+    if (gst.type === 'seg' && pv && pv.kind === 'line') { setS(); G.font = `700 17px ${FONT_UI}`; const d = unit(sub(pv.B, pv.A)), k = (G.measureText(gst.label.text).width + 18) / 2 + 22; at = sub(pv.A, mul(d, k / V.s)); }
+    measureTag(gst.label.text, at, false);
+  }
   if (gst.snapPt) ring(gst.snapPt);
   if (gst.alignPts) for (const q of gst.alignPts) ring(q);
   if (gst.piv) { ring(gst.piv); dotAt(gst.piv, SNAPC); }
@@ -1044,7 +1048,12 @@ function onDown(p, e) {
   if (lt) { select(lt); toast('Strumento bloccato: per spostarlo tocca “Sblocca”. Puoi disegnare lungo i suoi bordi.'); return; }
   if (U.mode === 'segmento') { const tg = stopTargets(), q = placeSnap(p, tg); return G0('seg', null, { a: q || p, snapPt: q, tg }); }
   if (U.mode === 'punto') { placePoint(p); return; }
-  if (U.mode === 'quota') { if (U.dimPend) return G0('dimoff', null, { prev: { kind: 'dim', s: dimOf(p) } }); const tg = stopTargets(), q = placeSnap(p, tg); return G0('dimab', null, { a: q || p, snapPt: q, tg }); }
+  if (U.mode === 'quota') { // toccando la linea di una quota la si sposta; altrimenti se ne disegna una nuova
+    const tol = (U.tf > 1 ? 18 : 12) / V.s, near = x => { const g = dimGeom(x); return Math.min(distSeg(p, g.P1, g.P2), dist(p, g.tp) - 0.25); }; // solo la linea di misura e la cifra, non le linee di riferimento
+    const dq = D.strokes.filter(x => x.type === 'dim' && near(x) <= tol).sort((a, b) => near(a) - near(b))[0];
+    if (dq) return G0('dimmove', dq, { o: { x: dq.cx, y: dq.cy } });
+    const tg = stopTargets(), q = placeSnap(p, tg); return G0('dimab', null, { a: q || p, snapPt: q, tg });
+  }
   if (U.mode === 'matita') { const tg = stopTargets(), q = placeSnap(p, tg) || p; return G0('free', null, { pts: [[r3(q.x), r3(q.y)]], tg, start: q, snapPt: q !== p ? q : null }); }
   // modalità Sposta: intestazione o deselezione
   // modalità Sposta: toccare un segno lo seleziona; se è sbloccato si trascina
@@ -1172,7 +1181,10 @@ function onMove(p) {
       const B = placeSnap(p, g.tg) || p; g.snapPt = placeSnap(p, g.tg); g.label = null;
       g.prev = dist(g.a, B) * V.s < 5 ? null : { kind: 'dim', s: dimFrom(g.a, B) }; break;
     }
-    case 'dimoff': g.prev = { kind: 'dim', s: dimOf(p) }; break;
+    case 'dimmove': { // la linea di misura segue il dito (a scatti di mezzo centimetro con i quadretti)
+      if (!g.undone) { pushUndo(); g.undone = true; }
+      let c = add(g.o, sub(p, g.p0)); if (D.sheet.gridSnap && D.sheet.grid) c = gridSnap(c); g.obj.cx = r3(c.x); g.obj.cy = r3(c.y); snapCache = null; break;
+    }
     case 'seg': {
       const a = g.a, v = sub(p, a); g.label = null; g.refLine = null; if (len(v) * V.s < 5) { g.prev = null; break; }
       const gd = segGuide(a, v); let dir = gd ? gd.d : unit(v);
@@ -1249,8 +1261,8 @@ function onUp(p) {
       else if (g.type === 'edge' && !g.moved) toast('Trascina lungo il bordo evidenziato per tracciare.');
       break;
     }
-    case 'dimab': if (g.prev) { U.dimPend = { A: g.a, B: { x: g.prev.s.x2, y: g.prev.s.y2 } }; renderCtx(); } else if (!g.moved) toast('Trascina dal primo al secondo punto da quotare.'); break;
-    case 'dimoff': { const q = dimOf(p); U.dimPend = null; pushUndo(); addStroke(q); changed(); renderCtx(); break; }
+    case 'dimab': if (g.prev) { pushUndo(); addStroke(g.prev.s); changed(); } else if (!g.moved) toast('Trascina dal primo al secondo punto da quotare.'); break;
+    case 'dimmove': if (g.undone) changed(); break;
     case 'brush': pushUndo(); addStroke({ type: 'brush', pts: g.pts, w: U.col.bw, color: U.col.color, alpha: U.col.alpha }); changed(); break;
     case 'free':
       if (!g.stopped && g.pts.length >= 2) { const l = g.pts[g.pts.length - 1], q = placeSnap({ x: l[0], y: l[1] }, g.tg); if (q) g.pts[g.pts.length - 1] = [r3(q.x), r3(q.y)]; }
@@ -1268,14 +1280,23 @@ function onUp(p) {
   }
   U.hoverEdge = null; draw();
 }
-// la quota nasce staccata di 1 cm dal disegno, dalla parte in alto o a sinistra; poi la si mette dove si tocca
+// la quota nasce staccata di 1 cm dal disegno, dalla parte libera: quella dove la linea di misura e la cifra non coprono
+// altri segni (a parità, in alto o a sinistra); poi, con lo strumento Quota, la si sposta trascinandone la linea
 function dimFrom(A, B) {
   const s = { type: 'dim', x1: r3(A.x), y1: r3(A.y), x2: r3(B.x), y2: r3(B.y), dir: U.dimDir || 'a', pen: '2H' };
   const u = s.dir === 'h' ? { x: 1, y: 0 } : s.dir === 'v' ? { x: 0, y: 1 } : unit(sub(B, A)); let n = { x: -u.y, y: u.x }; if (n.y > 1e-6 || (Math.abs(n.y) < 1e-6 && n.x > 0)) n = mul(n, -1);
-  const far = s.dir === 'h' ? { x: A.x, y: Math.min(A.y, B.y) } : s.dir === 'v' ? { x: Math.min(A.x, B.x), y: A.y } : A, C = add(far, mul(n, 1));
-  s.cx = r3(C.x); s.cy = r3(C.y); return s;
+  const { w, h } = sheetDims(D.sheet), others = D.strokes.filter(x => x.type !== 'fill' && x.type !== 'brush');
+  let best = null;
+  for (const sg of [1, -1]) { // prima in alto/a sinistra, poi dall'altra parte
+    const m = mul(n, sg), far = s.dir === 'h' ? { x: A.x, y: sg > 0 ? Math.min(A.y, B.y) : Math.max(A.y, B.y) } : s.dir === 'v' ? { x: sg > 0 ? Math.min(A.x, B.x) : Math.max(A.x, B.x), y: A.y } : A, C = add(far, mul(m, 1));
+    const t = Object.assign({}, s, { cx: r3(C.x), cy: r3(C.y) }), g = dimGeom(t); let bad = 0;
+    for (let k = 0; k <= 10; k++) { const q = add(g.P1, mul(sub(g.P2, g.P1), k / 10)); if (others.some(o => strokeDist(o, q) < 0.3)) bad++; }
+    if (others.some(o => strokeDist(o, g.tp) < 0.35)) bad += 3; // la cifra conta di più
+    if (!inSheet(g.P1) || !inSheet(g.P2) || g.tp.x < 0 || g.tp.y < 0 || g.tp.x > w || g.tp.y > h) bad += 20;
+    if (!best || bad < best.bad) best = { bad, t };
+  }
+  return best.t;
 }
-function dimOf(p) { const s = dimFrom(U.dimPend.A, U.dimPend.B), q = D.sheet.gridSnap && D.sheet.grid ? gridSnap(p) : p; s.cx = r3(q.x); s.cy = r3(q.y); return s; }
 function eraseAt(p) {
   const i = hitStroke(p, 12);
   if (i >= 0) { ensureUndo(); D.strokes.splice(i, 1); snapCache = null; draw(); }
@@ -1805,7 +1826,7 @@ document.addEventListener('keydown', e => {
   if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? doRedo() : doUndo(); return; }
   if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); doRedo(); return; }
   if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); saveBoard(); return; }
-  if (e.key === 'Escape') { if (!$('#drawer').hidden) closeDrawer(); else if (U.dimPend) { U.dimPend = null; renderCtx(); draw(); } else select(null); }
+  if (e.key === 'Escape') { if (!$('#drawer').hidden) closeDrawer(); else select(null); }
   if ((e.key === 'Delete' || e.key === 'Backspace') && selTool() && U.view < 0) { removeTool(selTool()); e.preventDefault(); }
 });
 
@@ -1835,7 +1856,7 @@ $('#pen2H').onclick = () => { U.pen = '2H'; renderTop(); draw(); };
 $('#penHB').onclick = () => { U.pen = 'HB'; renderTop(); draw(); };
 $('#dashBtn').onclick = () => { U.dash = !U.dash; renderTop(); };
 $('#undoBtn').onclick = doUndo; $('#redoBtn').onclick = doRedo;
-document.querySelectorAll('.pal[data-mode]').forEach(b => b.onclick = () => { if (U.view >= 0) return toast('Premi “Riprendi disegno” per tornare a disegnare.'); U.mode = b.dataset.mode; U.dimPend = null; U.selS = []; U.cg = null; U.addSel = false; if (['gomma', 'lettere', 'colore', 'punto'].includes(U.mode)) U.sel = null; renderTop(); renderCtx(); draw(); });
+document.querySelectorAll('.pal[data-mode]').forEach(b => b.onclick = () => { if (U.view >= 0) return toast('Premi “Riprendi disegno” per tornare a disegnare.'); U.mode = b.dataset.mode; U.selS = []; U.cg = null; U.addSel = false; if (['gomma', 'lettere', 'colore', 'punto'].includes(U.mode)) U.sel = null; renderTop(); renderCtx(); draw(); });
 // ogni strumento ricompare dove e come è stato usato l'ultima volta (posizione, rotazione, apertura del compasso)
 const TOOLKEYS = { compasso: ['x', 'y', 'ang', 'r', 's'], other: ['x', 'y', 'rot', 'len'] };
 function rememberTools() {
@@ -1899,9 +1920,9 @@ function renderCtx() {
     h = `<div class="ttl">${TOOLNAME[t.kind]}</div>${lenControls()}<span class="hint">Appoggia due o tre dita per spostarlo e ruotarlo.</span>${snapControls()}<div class="lbl">Aggancio</div><button class="chip ${D.sheet.magnet ? 'on' : ''}" data-a="magnet">${D.sheet.magnet ? 'Attivo' : 'Spento'}</button>`;
   } else if (U.mode === 'quota') {
     const dd = U.dimDir || 'a', c = (v, l) => `<button class="btn ${dd === v ? 'on' : ''}" data-a="dimdir" data-v="${v}">${l}</button>`;
-    h = `<div class="ttl">Quota</div><span class="hint" style="font-weight:700;color:var(--accent)">${U.dimPend ? '2 · Tocca dove mettere la linea di misura' : '1 · Trascina dal primo al secondo punto'}</span>
+    h = `<div class="ttl">Quota</div><span class="hint" style="font-weight:700;color:var(--accent)">Trascina dal primo al secondo punto: la quota va dalla parte libera. Per spostarla, trascina la sua linea.</span>
       <div class="lbl">Direzione</div><div class="seg">${c('a', 'Allineata')}${c('h', 'Orizzontale')}${c('v', 'Verticale')}</div>
-      ${U.dimPend ? '<button class="chip" data-a="dimcancel">Annulla</button>' : ''}<span class="hint">Misura in cm.</span>${snapControls()}`;
+      <span class="hint">Misura in cm.</span>${snapControls()}`;
   } else if (U.mode === 'segmento') {
     h = `<div class="ttl">Segmento</div>${lenControls()}<div class="lbl">Angolo</div><button class="chip ${U.angGuide ? 'on' : ''}" data-a="angg">${U.angGuide ? 'Guidato' : 'Libero'}</button><span class="hint">${U.angGuide ? 'Multipli di 15°, parallelo ∥ o perpendicolare ⊥.' : 'Qualsiasi inclinazione.'}</span>${snapControls()}`;
   } else if (U.mode === 'matita') {
@@ -1943,7 +1964,6 @@ $('#ctxbar').addEventListener('click', e => {
   else if (a === 'selnone') { U.selS = []; U.addSel = false; renderCtx(); draw(); }
   else if (a === 'libera') { U.lenMode = 'libera'; renderCtx(); }
   else if (a === 'dimdir') { U.dimDir = b.dataset.v; renderCtx(); draw(); }
-  else if (a === 'dimcancel') { U.dimPend = null; renderCtx(); draw(); }
   else if (a === 'precisa') { U.lenMode = 'precisa'; renderCtx(); }
   else if (a === 'lenbox') openNum({ title: 'Lunghezza del segmento (cm)', value: U.lenVal, min: 0.1, max: 100, onOk: v => { U.lenVal = v; U.lenMode = 'precisa'; renderCtx(); toast('Lunghezza precisa: ' + fmt(v) + ' cm. Parti dal punto iniziale e trascina nella direzione voluta.'); } });
   else if (a === 'radbox' && t) openNum({ title: 'Apertura del compasso (cm)', value: t.r, min: 0.2, max: 60, onOk: v => { pushUndo(); setRadius(t, v); changed(); } });
@@ -2020,7 +2040,7 @@ const GUIDA = [
     'Con lunghezza <b>Precisa</b> il segmento misura esattamente i cm scritti, nella direzione in cui trascini.',
     'Interruttori a destra: <b>Quadretti</b> (aggancio agli incroci) e <b>Linee</b> (si ferma sulle linee già disegnate).']],
   ['Quota', [
-    'Tocca <b>Quota</b> a sinistra. <b>1</b> · trascina dal primo al secondo punto da misurare: si aggancia a estremi, incroci e centri. <b>2</b> · tocca (o trascina) dove vuoi la linea di misura.',
+    'Tocca <b>Quota</b> a sinistra e trascina dal primo al secondo punto da misurare (si aggancia a estremi, incroci e centri): la quota si mette da sola dalla <b>parte libera</b>, senza coprire il disegno. Per spostarla, sempre con Quota, <b>trascina la sua linea</b> dove vuoi.',
     'La misura è in <b>cm</b>, scritta sopra la linea; alle estremità ci sono i <b>trattini obliqui</b>. Le linee sono sottili (2H).',
     'Nella barra a destra: <b>Allineata</b> (parallela ai due punti), <b>Orizzontale</b> o <b>Verticale</b>. Si sposta e si cancella come gli altri segni.']],
   ['Punto', [
