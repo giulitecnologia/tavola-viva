@@ -417,10 +417,13 @@ const toL = (t, p) => { const dx = p.x - t.x, dy = p.y - t.y, c = Math.cos(t.rot
 function polyL(t) {
   if (t.kind === 'righello') { const L = t.len + 1.2; return [{ x: 0, y: 0 }, { x: L, y: 0 }, { x: L, y: RW }, { x: 0, y: RW }]; }
   if (t.kind === 'riga') { const L = t.len; return [{ x: 0, y: 0 }, { x: L, y: 0 }, { x: L, y: GW }, { x: 0, y: GW }]; }
-  if (t.kind === 'sq45') { const a = t.len; return [{ x: 0, y: 0 }, { x: 0, y: -a }, { x: a, y: 0 }]; }
-  if (t.kind === 'sq3060') { const b = t.len, h = b / Math.sqrt(3); return [{ x: 0, y: 0 }, { x: 0, y: -h }, { x: b, y: 0 }]; }
+  if (SQMIN[t.kind]) { const { b, h } = sqBH(t); return t.flip ? [{ x: 0, y: 0 }, { x: -b, y: 0 }, { x: 0, y: -h }] : [{ x: 0, y: 0 }, { x: 0, y: -h }, { x: b, y: 0 }]; }
   return null;
 }
+// squadre: cateto lungo (b) e corto (h). "Gira" la capovolge sul cateto verticale: angolo retto e cateto appoggiato restano dove sono
+const sqBH = t => ({ b: t.len, h: t.kind === 'sq45' ? t.len : t.len / Math.sqrt(3) });
+const sqW = (t, p) => toW(t, { x: t.flip ? -p.x : p.x, y: p.y }); // punto della squadra come se non fosse girata
+const sqBase = t => t.flip ? 0 : 2; // indice del bordo con la scala
 function edges(t) {
   const p = polyL(t).map(q => toW(t, q)), out = [];
   for (let i = 0; i < p.length; i++) {
@@ -437,8 +440,8 @@ function insideTool(t, p, margin) {
 function handlesStraight(t) {
   const P = polyL(t);
   if (t.kind === 'righello' || t.kind === 'riga') { const L = P[1].x, W = P[2].y; return { rot: toW(t, { x: L + 1.4, y: W / 2 }), size: toW(t, { x: L - 0.5, y: W - 0.5 }) }; }
-  const b = P[2].x, h = -P[1].y, m = { x: b / 2, y: -h / 2 }, nn = unit({ x: h, y: -b });
-  return { rot: toW(t, add(m, mul(nn, 1.5))), size: toW(t, { x: b + 1.2, y: 0.0 }) };
+  const { b, h } = sqBH(t), m = { x: b / 2, y: -h / 2 }, nn = unit({ x: h, y: -b });
+  return { rot: sqW(t, add(m, mul(nn, 1.5))), size: sqW(t, { x: b + 1.2, y: 0.0 }) };
 }
 function cgeom(t) {
   const C = { x: t.x, y: t.y }, u = { x: Math.cos(t.ang), y: Math.sin(t.ang) };
@@ -802,7 +805,7 @@ function paintStraight(t, sel) {
     // bordo inferiore: riga di riferimento
     G.beginPath(); G.lineWidth = 0.8 / V.s; G.strokeStyle = rgbaOf(ACC, 0.35); tick(0.3, RW - 0.35, t.len + 0.9, RW - 0.35); G.stroke();
   } else if (t.kind === 'sq45' || t.kind === 'sq3060') {
-    const P = polyL(t), b = P[2].x, h = -P[1].y;
+    const { b, h } = sqBH(t); if (t.flip) G.scale(-1, 1);
     // scala lungo il cateto orizzontale, a partire da 1 cm dal vertice retto
     const n = SQSCALE[t.kind] * 10; G.beginPath();
     for (let i = 0; i <= n; i++) { const x = SQX0 + i * 0.1, L = i % 10 === 0 ? 0.6 : i % 5 === 0 ? 0.4 : 0.22; if (i % 10 && !mmOk && i % 5) continue; tick(x, 0, x, -L); }
@@ -817,12 +820,12 @@ function paintStraight(t, sel) {
     for (let c = 0; c <= t.len; c += step) drawTxt(String(c), toW(t, { x: 0.6 + c, y: 1.2 }), 0.36, rgbaOf(THEME.ink, 0.95), 'center', t.rot, { minPx: 9, font: FONT_UI, bold: true });
     drawTxt('cm', toW(t, { x: 0.6 + Math.min(t.len, 3) - 1.5, y: 2.4 }), 0.32, rgbaOf(THEME.ink, 0.6), 'center', t.rot, { minPx: 9, font: FONT_UI });
   } else if (t.kind === 'sq45' || t.kind === 'sq3060') {
-    const P = polyL(t), b = P[2].x, h = -P[1].y, step = 0.34 * V.s < 9 ? 2 : 1;
-    for (let c = 0; c <= SQSCALE[t.kind]; c += step) drawTxt(String(c), toW(t, { x: SQX0 + c, y: -0.95 }), 0.3, rgbaOf(THEME.ink, 0.9), 'center', t.rot, { minPx: 8, font: FONT_UI, bold: true });
+    const { b, h } = sqBH(t), step = 0.34 * V.s < 9 ? 2 : 1, al = t.flip ? 'right' : 'left'; // girata: i numeri restano leggibili
+    for (let c = 0; c <= SQSCALE[t.kind]; c += step) drawTxt(String(c), sqW(t, { x: SQX0 + c, y: -0.95 }), 0.3, rgbaOf(THEME.ink, 0.9), 'center', t.rot, { minPx: 8, font: FONT_UI, bold: true });
     const a1 = t.kind === 'sq45' ? '45°' : '30°', a2 = t.kind === 'sq45' ? '45°' : '60°';
-    drawTxt('90°', toW(t, { x: 0.3, y: -1.75 }), 0.36, rgbaOf(THEME.ink, 0.75), 'left', t.rot, { minPx: 9, font: FONT_UI, bold: true });
-    drawTxt(a1, toW(t, { x: b - 5, y: -2.1 }), 0.36, rgbaOf(THEME.ink, 0.75), 'center', t.rot, { minPx: 9, font: FONT_UI, bold: true });
-    drawTxt(a2, toW(t, { x: 0.55, y: -h + 3.2 }), 0.36, rgbaOf(THEME.ink, 0.75), 'left', t.rot, { minPx: 9, font: FONT_UI, bold: true });
+    drawTxt('90°', sqW(t, { x: 0.3, y: -1.75 }), 0.36, rgbaOf(THEME.ink, 0.75), al, t.rot, { minPx: 9, font: FONT_UI, bold: true });
+    drawTxt(a1, sqW(t, { x: b - 5, y: -2.1 }), 0.36, rgbaOf(THEME.ink, 0.75), 'center', t.rot, { minPx: 9, font: FONT_UI, bold: true });
+    drawTxt(a2, sqW(t, { x: 0.55, y: -h + 3.2 }), 0.36, rgbaOf(THEME.ink, 0.75), al, t.rot, { minPx: 9, font: FONT_UI, bold: true });
   } else if (t.kind === 'riga') {
     drawTxt('RIGA', toW(t, { x: t.len / 2, y: GW / 2 + 0.15 }), 0.4, 'rgba(120,80,10,0.45)', 'center', t.rot, { minPx: 9, font: FONT_UI, bold: true });
   }
@@ -1124,7 +1127,7 @@ function onMove(p) {
       ensureUndo(); const lp = toL(t, p); let nl;
       if (t.kind === 'righello') nl = clamp(Math.round(lp.x + 0.5 - 1.2), 10, 60);
       else if (t.kind === 'riga') nl = clamp(Math.round(lp.x + 0.5), 10, 80);
-      else nl = clamp(Math.round((lp.x - 1.2) * 2) / 2, SQMIN[t.kind], 45);
+      else nl = clamp(Math.round(((t.flip ? -lp.x : lp.x) - 1.2) * 2) / 2, SQMIN[t.kind], 45);
       t.len = nl; g.label = { text: TOOLNAME[t.kind] + ' ' + fmt(nl) + ' cm', at: add(p, { x: 0, y: -50 / V.s }) };
       break;
     }
@@ -1406,7 +1409,7 @@ function trySnapLine(t) {
 function detent(t, s) {
   const e = s.e, nl = { x: e.d.y, y: -e.d.x }, ea = edges(t)[s.ia], refs = [ea.a, ea.b];
   if (t.kind === 'righello' && s.ia === 0) refs.push(toW(t, { x: 0.6, y: 0 }));
-  if (SQMIN[t.kind] && s.ia === 2) refs.push(toW(t, { x: SQX0, y: 0 }));
+  if (SQMIN[t.kind] && s.ia === sqBase(t)) refs.push(sqW(t, { x: SQX0, y: 0 }));
   let best = null;
   for (const P of snapPts()) {
     if (Math.abs(dot(sub(P, e.a), nl)) > 0.05) continue;
@@ -1902,7 +1905,7 @@ $('#dashBtn').onclick = () => { U.dash = !U.dash; renderTop(); };
 $('#undoBtn').onclick = doUndo; $('#redoBtn').onclick = doRedo;
 document.querySelectorAll('.pal[data-mode]').forEach(b => b.onclick = () => { if (U.view >= 0) return toast('Premi “Riprendi disegno” per tornare a disegnare.'); U.mode = b.dataset.mode; U.selS = []; U.cg = null; U.addSel = false; if (['gomma', 'lettere', 'colore', 'punto'].includes(U.mode)) U.sel = null; renderTop(); renderCtx(); draw(); });
 // ogni strumento ricompare dove e come è stato usato l'ultima volta (posizione, rotazione, apertura del compasso)
-const TOOLKEYS = { compasso: ['x', 'y', 'ang', 'r', 's'], other: ['x', 'y', 'rot', 'len'] };
+const TOOLKEYS = { compasso: ['x', 'y', 'ang', 'r', 's'], other: ['x', 'y', 'rot', 'len', 'flip'] };
 function rememberTools() {
   if (D.example || !D.tools.length) return;
   const m = lsGet(LS.last) || {};
@@ -1929,6 +1932,17 @@ document.querySelectorAll('.pal[data-add]').forEach(b => b.onclick = () => {
   if (kind === 'compasso') toast('Compasso: tocca dove puntare l’ago.');
   changed();
 });
+// se girata esce dal foglio, la squadra scorre lungo il lato appoggiato (resta sulla stessa linea) quanto basta per rientrare
+function keepOnSheet(t) {
+  const { w, h } = sheetDims(D.sheet), m = D.sheet.frame ? D.sheet.margin : 0, P = polyL(t).map(q => toW(t, q)), d = edges(t)[sqBase(t)].d;
+  const fit = (vs, v0, lo, hi) => { // spostamento per stare tra lo e hi; se non ci sta tutta, l'angolo retto resta dentro
+    let s = Math.max(0, lo - Math.min(...vs)) - Math.max(0, Math.max(...vs) - hi);
+    if (v0 + s > hi) s = hi - v0; if (v0 + s < lo) s = lo - v0; return s;
+  };
+  const dx = fit(P.map(q => q.x), t.x, m, w - m), dy = fit(P.map(q => q.y), t.y, m, h - m);
+  const k = Math.abs(d.x) > 0.5 ? dx / d.x : Math.abs(d.y) > 0.5 ? dy / d.y : 0;
+  if (k) { t.x += d.x * k; t.y += d.y * k; }
+}
 function removeTool(t) { pushUndo(); D.tools = D.tools.filter(x => x !== t); U.sel = null; changed(); }
 
 /* ================= barra contestuale ================= */
@@ -1961,7 +1975,7 @@ function renderCtx() {
       <div class="sp"></div><button class="chip" data-a="fullc">Circonferenza intera</button><button class="chip ${ph === 'arcA' || ph === 'arcB' ? 'on' : ''}" data-a="arcab">Arco da… a…</button>
       <button class="chip ${ph === 'center' ? 'on' : ''}" data-a="repoint">Punta altrove</button><button class="chip ${ph === 'open' ? 'on' : ''}" data-a="reopen">Cambia apertura</button><button class="chip" data-a="center"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Segna il centro</button>`;
   } else if (t) {
-    h = `<div class="ttl">${TOOLNAME[t.kind]}</div>${lenControls()}<span class="hint">Appoggia due o tre dita per spostarlo e ruotarlo.</span>${snapControls()}<div class="lbl">Aggancio</div><button class="chip ${D.sheet.magnet ? 'on' : ''}" data-a="magnet">${D.sheet.magnet ? 'Attivo' : 'Spento'}</button>`;
+    h = `<div class="ttl">${TOOLNAME[t.kind]}</div>${SQMIN[t.kind] ? `<button class="chip ${t.flip ? 'on' : ''}" data-a="flip" title="Capovolge la squadra: l’angolo retto e il lato appoggiato restano dove sono"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M9 6L3 18h6z"/><path d="M15 6l6 12h-6z" stroke-dasharray="2.5 2"/></svg>Gira</button>` : ''}${lenControls()}<span class="hint">Appoggia due o tre dita per spostarlo e ruotarlo.</span>${snapControls()}<div class="lbl">Aggancio</div><button class="chip ${D.sheet.magnet ? 'on' : ''}" data-a="magnet">${D.sheet.magnet ? 'Attivo' : 'Spento'}</button>`;
   } else if (U.mode === 'quota') {
     const dd = U.dimDir || 'a', c = (v, l) => `<button class="btn ${dd === v ? 'on' : ''}" data-a="dimdir" data-v="${v}">${l}</button>`;
     h = `<div class="ttl">Quota</div><span class="hint" style="font-weight:700;color:var(--accent)">Trascina dal primo al secondo punto: la quota va dalla parte libera. Per spostarla, trascina la sua linea.</span>
@@ -2040,6 +2054,7 @@ $('#ctxbar').addEventListener('click', e => {
   else if (a === 'dotletter') { U.dotLetter = !U.dotLetter; renderCtx(); }
   else if (a === 'gsnap') { D.sheet.gridSnap = !D.sheet.gridSnap; changed(); toast(D.sheet.gridSnap ? 'Gli estremi dei segmenti si fermano sugli incroci dei quadretti.' : 'Aggancio ai quadretti spento: segmenti liberi.'); }
   else if (a === 'lock' && t) { pushUndo(); t.locked = !t.locked; changed(); }
+  else if (a === 'flip' && t && SQMIN[t.kind]) { if (t.locked) { toast('Squadra bloccata: tocca “Sblocca” per girarla.'); return; } pushUndo(); t.flip = !t.flip; if (!t.flip) delete t.flip; keepOnSheet(t); changed(); }
   else if (a === 'remove' && t) removeTool(t);
   else if (a === 'nextletter') openText({ title: 'Prossima lettera', value: '', onOk: v => { if (v.trim()) { U.nextLetter = v.trim().slice(0, 12); renderCtx(); } } });
 });
@@ -2079,7 +2094,8 @@ const GUIDA = [
   ['Squadre 45° e 30°/60°', [
     'Si usano come il righello: trascina per spostare, freccia ricurva per ruotare, traccia lungo i bordi.',
     'Con l’<b>aggancio magnetico</b> le squadre si accostano bordo contro bordo e scorrono una sull’altra: comodo per <b>parallele e perpendicolari</b>.',
-    'Una squadra appoggiata a una linea o alla squadratura ci resta attaccata; per staccarla tirala via di lato.']],
+    'Una squadra appoggiata a una linea o alla squadratura ci resta attaccata; per staccarla tirala via di lato.',
+    'Il pulsante <b>⇄ Gira</b> (barra a destra) la capovolge come sul banco: l’angolo retto e il lato appoggiato restano dove sono e la squadra passa dall’altra parte. Serve per le linee inclinate da tutte e due le parti, per esempio a 30° nelle <b>assonometrie</b>.']],
   ['Compasso', [
     'Toccalo nella colonna a sinistra e segui i passi scritti in verde a destra: <b>1</b> tocca dove puntare l’ago, <b>2</b> tocca fin dove aprirlo (o scrivi la misura), <b>3</b> trascina il dito in qualsiasi punto per tracciare.',
     'Per <b>spostarlo</b>: trascina l’ago, oppure toccalo e poi tocca il nuovo punto. L’apertura resta uguale.',
