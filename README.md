@@ -10,6 +10,12 @@ I disegni vengono salvati nel browser (localStorage) del dispositivo in uso. Per
 
 Dal pulsante **Proiezioni** si apre `proiezioni.html`, una pagina a parte con il triedro di Monge: solidi e gruppi di solidi, proiezioni su PV, PO e PL, sezioni e apertura dei piani fino al disegno sul foglio.
 
+## Assonometrie (in prova)
+
+Dal pulsante **Assonometrie** si apre `assonometrie.html`, una pagina a parte: un solido alla volta in assonometria isometrica, cavaliera o monometrica (pianta vera a 30°/60°), con il solido in 3D da girare e il disegno sul foglio 33 × 24 passaggio per passaggio. PDF consegna, consegna e soluzione, passaggi (4 per pagina) e Porta in Tavola viva. È una sezione in prova, non ancora definitiva.
+
+Le squadre di Tavola viva hanno il pulsante **⇄ Gira** per capovolgerle e tracciare le inclinate da tutte e due le parti.
+
 ## Installarla come app
 
 Dal sito https://giulitecnologia.github.io/tavola-viva/ si può installare come un'app, con la sua icona. Una volta installata funziona anche senza internet.

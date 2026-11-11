@@ -18,8 +18,9 @@ Sito: https://giulitecnologia.github.io/tavola-viva/ (GitHub Pages dal ramo `mai
 4. Dire a Giulia di ricaricare la pagina (Ctrl+F5, su Mac Cmd+Maiusc+R).
 
 ## File
-- `index.html` — Tavola viva: squadre, riga, righello, compasso guidato, segmento (libero/preciso, angoli guidati), quota, punto (anche in fila ogni N cm), matita, colore (secchiello/pastello), gomma, lettere; passaggi; guida con il riquadro delle segnalazioni (mail della scuola di Giulia); salvataggio nel browser (IndexedDB), come file PDF e su Google Drive.
+- `index.html` — Tavola viva: squadre (con «⇄ Gira» per capovolgerle), riga, righello, compasso guidato, segmento (libero/preciso, angoli guidati), quota, punto (anche in fila ogni N cm), matita, colore (secchiello/pastello), gomma, lettere; passaggi; guida con il riquadro delle segnalazioni (mail della scuola di Giulia); salvataggio nel browser (IndexedDB), come file PDF e su Google Drive.
 - `proiezioni.html` — Proiezioni ortogonali nel triedro di Monge: solidi e gruppi, sezioni, apertura dei piani, trascinamento dei solidi, legenda Misure, esercizi salvati, Drive (cartella Tavola viva → Proiezioni), PDF consegna/soluzione, Porta in Tavola viva con passaggi automatici.
+- `assonometrie.html` — Assonometrie **in prova** (scritta «In prova», pulsante con «prova» in Tavola viva): un solido alla volta, isometrica (x e y a 30°), cavaliera (y a 45° verso destra in alto, profondità dimezzata), monometrica (pianta vera, x a 30° e y a 60°, altezze vere); solido 3D da girare, passaggi sul foglio 33 × 24 (linee nuove in arancione), PDF consegna/soluzione/passaggi, Porta in Tavola viva (in monometrica i cerchi diventano archi). Niente Drive né elenco esercizi per ora. Test: `window.AS`.
 - `ripara.html` — riparazione se l'app si blocca (aggiorna la copia offline, esercizio nuovo, svuota elenco). La barra rossa d'errore nelle pagine porta qui.
 - `privacy.html` — norme sulla privacy (richieste da Google per Drive).
 - `sw.js` — copia offline (network-first). `manifest.webmanifest` — app installabile.
@@ -34,7 +35,7 @@ Sito: https://giulitecnologia.github.io/tavola-viva/ (GitHub Pages dal ramo `mai
 - Il tema predefinito è Verde bosco (anche Petrolio e Lavanda).
 
 ## Idee in attesa (solo se Giulia le chiede)
-- Parte per le **assonometrie** (isometrica, cavaliera, monometrica) come pagina a parte, dopo aver provato bene le Proiezioni in classe; chiedere prima come le insegna (foglio bianco, quadretti o isometrico).
+- Assonometrie: Giulia le fa su **foglio bianco**. Possibili aggiunte se le chiede: gruppi di solidi, Drive ed elenco esercizi, ovale a 4 centri al posto dell'ellisse.
 - Campo "Consegna" con le misure da far uscire nel PDF delle tavole (Giulia non è sicura che serva: aspettare).
 - Compasso: ogni tanto ancora scomodo sulla LIM; chiedere in quale passaggio.
 - Quote di cerchi e archi (Ø e R).

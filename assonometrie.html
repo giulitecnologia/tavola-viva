@@ -1,0 +1,605 @@
+<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tavola viva · Assonometrie</title>
+<meta name="theme-color" content="#1f5c45">
+<link rel="icon" type="image/png" sizes="32x32" href="icone/favicon-32.png">
+<style>
+/* Assonometrie (isometrica, cavaliera, monometrica): il solido in 3D e il disegno sul foglio 33 × 24, passaggio per passaggio */
+:root{
+  --desk:#cdd9d2;--chrome:#f5f8f6;--chrome-2:#e6eee9;--ink:#1d282b;--muted:#5b6b6f;--line:#cbdad1;
+  --accent:#1f5c45;--accent-soft:#d3ebe0;
+  --f-ui:"Avenir Next","Segoe UI","Helvetica Neue",system-ui,sans-serif;
+  color-scheme:light;
+}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--desk);color:var(--ink);font-family:var(--f-ui);font-size:15px;overflow:hidden;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit}
+#app{position:fixed;inset:0;display:grid;grid-template-columns:104px 1fr 210px;grid-template-rows:auto 1fr auto;background:var(--desk)}
+#top{grid-column:1/4;display:flex;align-items:center;gap:10px;padding:7px 12px;padding-top:calc(7px + env(safe-area-inset-top,0px));background:var(--chrome);border-bottom:3px solid var(--accent);min-width:0;overflow-x:auto;scrollbar-width:none}
+#top::-webkit-scrollbar{display:none}
+.brand{display:flex;align-items:center;gap:8px;font-weight:700;white-space:nowrap}
+.brand b{font-size:17px}.brand span{font-weight:600;color:var(--accent)}
+.brand .logo{width:28px;height:28px;color:var(--accent);flex:none}
+.spacer{flex:1 1 0;min-width:4px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:46px;min-width:46px;padding:0 12px;border:1px solid var(--line);background:#fff;border-radius:10px;cursor:pointer;white-space:nowrap;font-weight:600;font-size:14.5px;touch-action:manipulation;text-decoration:none;color:inherit;box-sizing:border-box}
+.btn:active{transform:translateY(1px)}
+.btn.on,.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn[disabled]{opacity:.4;cursor:default}
+.btn svg{width:22px;height:22px;flex:none}
+.btn:focus-visible,.sol:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.test{font-size:12.5px;font-weight:700;color:#a6501a;background:#fbe9dc;border:1px solid #ecc9ae;border-radius:8px;padding:4px 8px;white-space:nowrap}
+
+/* solidi a sinistra */
+#solids{grid-row:2/4;background:var(--chrome);border-right:1px solid var(--line);display:flex;flex-direction:column;gap:3px;padding:8px 6px;overflow-y:auto}
+.h{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:700;padding:6px 4px 2px;text-align:center}
+.sol{display:flex;flex-direction:column;align-items:center;gap:3px;min-height:58px;padding:5px 2px;border:1px solid transparent;border-radius:10px;background:transparent;cursor:pointer;font-size:12px;font-weight:600;line-height:1.15;text-align:center;touch-action:manipulation;flex:none}
+.sol svg{width:30px;height:30px}
+.sol.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+
+/* foglio e solido 3D */
+#stage{grid-row:2;grid-column:2;position:relative;overflow:hidden;min-width:0}
+#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+#stepBox{position:absolute;left:12px;top:12px;max-width:min(460px,calc(100% - 24px));padding:10px 14px;border-radius:12px;background:#fffffff2;border:1px solid var(--line);box-shadow:0 4px 18px #1d282b22;font-size:16px;line-height:1.4}
+#stepBox b{display:block;color:var(--accent);font-size:17px;margin-bottom:3px}
+#box3d{position:absolute;right:12px;top:12px;width:230px;height:230px;border-radius:12px;background:#fff;border:1px solid var(--line);box-shadow:0 4px 18px #1d282b22;overflow:hidden}
+#box3d canvas{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#box3d .cap{position:absolute;left:8px;top:6px;font-size:12px;font-weight:700;color:var(--muted);pointer-events:none}
+#box3d .cap2{position:absolute;left:8px;bottom:6px;font-size:11.5px;color:var(--muted);pointer-events:none}
+#warn{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);width:max-content;max-width:calc(100% - 24px);padding:10px 14px;border-radius:12px;background:#fde8e3;border:2px solid #d63a1f;color:#7a1d0c;font-size:15px;line-height:1.4;z-index:2;box-shadow:0 4px 18px #1d282b22}
+
+/* opzioni a destra */
+#side{grid-row:2/4;grid-column:3;background:var(--chrome);border-left:1px solid var(--line);overflow-y:auto;padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+#side .ttl{font-weight:700;text-align:center;font-size:15px;padding:2px 0 6px;border-bottom:1px solid var(--line)}
+.fld{display:flex;flex-direction:column;gap:3px}
+.fld .k,.k2{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.step{display:grid;grid-template-columns:44px 1fr 44px;gap:4px;align-items:center}
+.step button{min-height:44px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:22px;font-weight:700;cursor:pointer;touch-action:manipulation}
+.step .v{text-align:center;font-weight:700;font-size:18px;font-variant-numeric:tabular-nums}
+.tog{min-height:42px;border:1px solid var(--line);border-radius:10px;background:#fff;font-weight:600;cursor:pointer;text-align:left;padding:0 10px;display:flex;align-items:center;gap:8px;touch-action:manipulation}
+.tog::before{content:'';width:18px;height:18px;border-radius:5px;border:2px solid var(--line);flex:none;box-sizing:border-box}
+.tog.on::before{background:var(--accent);border-color:var(--accent);box-shadow:inset 0 0 0 2px #fff}
+.sp{border-top:1px solid var(--line);margin:4px 0}
+.typ{min-height:44px;border:1px solid var(--line);border-radius:10px;background:#fff;font-weight:700;cursor:pointer;text-align:left;padding:0 10px;touch-action:manipulation}
+.typ.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.desc{font-size:13px;color:var(--muted);line-height:1.35}
+.side-btn{min-height:44px;border:1px solid var(--line);border-radius:10px;background:#fff;font-weight:600;cursor:pointer;touch-action:manipulation;padding:4px 8px;line-height:1.2}
+.side-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* barra in basso: i passaggi */
+#bottom{grid-row:3;grid-column:2;display:flex;align-items:center;gap:10px;padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));background:var(--chrome);border-top:1px solid var(--line);flex-wrap:wrap}
+#stepLbl{flex:1 1 200px;min-width:140px;font-weight:700;font-size:16px;text-align:center}
+#dots{display:flex;gap:5px;justify-content:center;margin-top:4px}
+#dots i{width:10px;height:10px;border-radius:50%;background:var(--line);display:block}
+#dots i.on{background:var(--accent)}
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#1c2126;color:#fff;padding:10px 16px;border-radius:12px;font-weight:600;z-index:30;max-width:calc(100% - 32px);opacity:0;pointer-events:none;transition:opacity .25s}
+#toast.show{opacity:1}#toast.warn{background:#8a3b0d}
+@media (max-width:1100px){#app{grid-template-columns:84px 1fr 180px}.sol{font-size:11px}.sol svg{width:26px;height:26px}.brand b{display:none}#box3d{width:170px;height:170px}}
+</style>
+</head><body>
+<div id="app">
+  <header id="top">
+    <div class="brand"><svg class="logo" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 26a13 13 0 0 1 22 0" stroke-width="1.6" stroke-dasharray="2.5 2.5"/><path d="M16 4v3M16 7 9 26M16 7l7 19"/><circle cx="16" cy="8" r="2.2" fill="currentColor"/></svg><b>Tavola viva</b><span>· Assonometrie</span></div>
+    <span class="test">In prova · non definitiva</span>
+    <div class="spacer"></div>
+    <button class="btn" id="pdfCon" title="Consegna per i ragazzi: il solido e le misure, senza soluzione">PDF consegna</button>
+    <button class="btn" id="pdfSol" title="Consegna e soluzione: il disegno finito sul foglio">Consegna e soluzione</button>
+    <button class="btn" id="pdfSteps" title="I passaggi, 4 per pagina A4">Passaggi in PDF</button>
+    <button class="btn primary" id="tavBtn" title="Mette il disegno su un foglio di Tavola viva, con i passaggi già pronti">Porta in Tavola viva</button>
+    <a class="btn" href="index.html" title="Torna alla tavola"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5-7 7 7 7"/></svg>Tavola</a>
+    <button class="btn" id="fsBtn" title="Schermo intero"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+  </header>
+
+  <nav id="solids" aria-label="Solidi">
+    <div class="h">Tipo di solido</div>
+    <button class="sol" data-s="parallelepipedo"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M5 11l7-5h15l-7 5zM5 11v15h15V11M20 26l7-5V6"/></svg>Parallele&shy;pipedo</button>
+    <button class="sol" data-s="cubo"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M6 11l6-5h14l-6 5zM6 11v15h14V11M20 26l6-5V6"/></svg>Cubo</button>
+    <button class="sol" data-s="prisma3"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M6 26h14l6-5M6 26l7-6 13 1M6 26V10l7-5v15M20 26V10L6 10M13 5l13 1v15M20 10l6-4"/></svg>Prisma triangolare</button>
+    <button class="sol" data-s="prisma6"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M9 8h14l4 4-4 4H9l-4-4zM5 12v13l4 4h14l4-4V12M9 16v13M23 16v13"/></svg>Prisma esagonale</button>
+    <button class="sol" data-s="piramide"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M16 4 4 24l9 4 15-4zM16 4l-3 24M16 4l12 20"/></svg>Piramide</button>
+    <button class="sol" data-s="cilindro"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7"><ellipse cx="16" cy="8" rx="10" ry="4"/><path d="M6 8v16c0 2.2 4.5 4 10 4s10-1.8 10-4V8"/></svg>Cilindro</button>
+    <button class="sol" data-s="cono"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M16 4 6 24M16 4l10 20"/><ellipse cx="16" cy="24" rx="10" ry="4"/></svg>Cono</button>
+  </nav>
+
+  <main id="stage">
+    <canvas id="cv" aria-label="Il foglio con il disegno in assonometria"></canvas>
+    <div id="stepBox" aria-live="polite"></div>
+    <div id="box3d"><canvas id="c3" aria-label="Il solido in 3D: trascina per girarlo"></canvas><span class="cap">Il solido</span><span class="cap2">Trascina per girarlo</span></div>
+    <div id="warn" hidden role="alert"></div>
+  </main>
+
+  <aside id="side" aria-label="Tipo, misure e opzioni"></aside>
+
+  <div id="bottom">
+    <button class="btn" id="prevBtn" title="Passaggio precedente"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5-7 7 7 7"/></svg>Indietro</button>
+    <div id="stepLbl"><span id="stepTxt"></span><div id="dots"></div></div>
+    <button class="btn primary" id="nextBtn" title="Passaggio successivo">Avanti<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 5 7 7-7 7"/></svg></button>
+    <button class="btn" id="allBtn" title="Mostra il disegno finito">Disegno finito</button>
+  </div>
+  <div id="toast" role="status"></div>
+  <input type="file" id="fileIn" accept=".pdf" hidden>
+</div>
+
+<script>
+/* se qualcosa si rompe, lo si vede: una barra rossa in alto con l'errore (utile per capire i problemi sui computer della scuola) */
+(() => { const show = m => { try { let b = document.getElementById('errbar'); if (!b) { b = document.createElement('div'); b.id = 'errbar'; b.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99;background:#b3261e;color:#fff;font:600 14px system-ui,sans-serif;padding:8px 12px;line-height:1.35'; (document.body || document.documentElement).appendChild(b); } b.innerHTML = ''; b.append('⚠ ' + m + ' '); const l = document.createElement('a'); l.href = 'ripara.html'; l.textContent = 'Apri Ripara'; l.style.cssText = 'margin-left:10px;display:inline-block;background:#fff;color:#b3261e;border-radius:6px;padding:2px 10px;text-decoration:none'; b.appendChild(l); } catch (_) { } };
+  window.addEventListener('error', e => show('Errore: ' + (e.message || 'errore') + (e.lineno ? ' (riga ' + e.lineno + ')' : '') + '.'));
+  setTimeout(() => { if (!window.__tvPronta) show('L’app non si è avviata bene. Prova a ricaricare la pagina; se non basta:'); }, 8000);
+  window.addEventListener('unhandledrejection', e => show('Errore: ' + ((e.reason && e.reason.message) || String(e.reason)) + '.')); })();
+</script>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const DEG = Math.PI / 180, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const fmt = v => (Math.round(v * 100) / 100).toString().replace('.', ','); // fino ai centesimi
+const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+
+/* ---------- tema, lo stesso scelto nella tavola ---------- */
+const THEMES = {
+  bosco: { accent: '#1f5c45', soft: '#d3ebe0', desk: '#cdd9d2', chrome: '#f5f8f6', chrome2: '#e6eee9', line: '#cbdad1' },
+  petrolio: { accent: '#0a6873', soft: '#d6ecee', desk: '#c9d3d1', chrome: '#f5f7f6', chrome2: '#e9eeed', line: '#ccd7d5' },
+  lavanda: { accent: '#6247aa', soft: '#e8e2f6', desk: '#d6d1e4', chrome: '#f8f6fc', chrome2: '#edeaf6', line: '#d9d2e8' }
+};
+let TH = THEMES.bosco;
+try { TH = THEMES[JSON.parse(localStorage.getItem('tavolaviva.tema'))] || TH; } catch (_) { }
+for (const [v, k] of [['--accent', 'accent'], ['--accent-soft', 'soft'], ['--desk', 'desk'], ['--chrome', 'chrome'], ['--chrome-2', 'chrome2'], ['--line', 'line']]) document.documentElement.style.setProperty(v, TH[k]);
+document.querySelector('meta[name="theme-color"]').content = TH.accent;
+const NEW = '#d9480f'; // colore delle linee del passaggio che si sta guardando
+
+/* ---------- solidi e tipi di assonometria ----------
+   Coordinate del solido (cm): x = larghezza, y = profondità, z = altezza; il solido sta in x ∈ [0, A], y ∈ [0, B], z ∈ [0, H].
+   O è l'angolo in basso più vicino a chi guarda, da cui partono i tre assi. */
+const KINDS = {
+  parallelepipedo: { n: 'Parallelepipedo', art: 'il', dims: [['a', 'Larghezza', 6], ['b', 'Profondità', 4], ['h', 'Altezza', 5]] },
+  cubo: { n: 'Cubo', art: 'il', dims: [['l', 'Spigolo', 5]] },
+  prisma3: { n: 'Prisma triangolare', art: 'il', dims: [['l', 'Lato di base', 6], ['h', 'Altezza', 6]] },
+  prisma6: { n: 'Prisma esagonale', art: 'il', dims: [['l', 'Lato di base', 3], ['h', 'Altezza', 6]] },
+  piramide: { n: 'Piramide quadrata', art: 'la', dims: [['l', 'Lato di base', 6], ['h', 'Altezza', 7]] },
+  cilindro: { n: 'Cilindro', art: 'il', dims: [['d', 'Diametro', 5], ['h', 'Altezza', 6]] },
+  cono: { n: 'Cono', art: 'il', dims: [['d', 'Diametro', 6], ['h', 'Altezza', 7]] }
+};
+const c30 = Math.cos(30 * DEG), s30 = 0.5, c45 = Math.SQRT1_2;
+// M: le due righe della proiezione (u verso destra, v verso l'alto); ky: riduzione sull'asse y; ang: angoli degli assi x e y sul foglio
+const TYPES = {
+  iso: { n: 'Isometrica', M: [[-c30, c30, 0], [s30, s30, 1]], ky: 1, ang: [150, 30],
+    desc: 'Assi x e y a 30° dall’orizzontale, z verticale. Misure vere su tutti e tre gli assi.' },
+  cav: { n: 'Cavaliera', M: [[1, 0.5 * c45, 0], [0, 0.5 * c45, 1]], ky: 0.5, ang: [0, 45],
+    desc: 'La faccia davanti è in vera forma: x orizzontale, z verticale, y a 45° verso destra in alto. La profondità si dimezza.' },
+  mono: { n: 'Monometrica', M: [[c30, -s30, 0], [s30, c30, 1]], ky: 1, ang: [30, 120],
+    desc: 'Pianta vera ruotata: x a 30° e y a 60° dall’orizzontale, z verticale. Misure vere su tutti e tre gli assi.' }
+};
+const defDims = k => Object.fromEntries(KINDS[k].dims.map(d => [d[0], d[2]]));
+const LS = 'tavolaviva.assonometrie';
+const S = { kind: 'parallelepipedo', dims: {}, type: 'iso', hidden: false, labels: true, show3d: true, step: 0, yaw: 225, pitch: 35.26 };
+if (location.hash === '#ripristina') { try { localStorage.removeItem(LS); } catch (_) { } history.replaceState(null, '', location.pathname); }
+try { const o = JSON.parse(localStorage.getItem(LS)) || {}; Object.assign(S, o); } catch (_) { }
+if (!KINDS[S.kind]) S.kind = 'parallelepipedo'; if (!TYPES[S.type]) S.type = 'iso'; if (!S.dims || typeof S.dims !== 'object') S.dims = {};
+const dimsOf = () => S.dims[S.kind] || (S.dims[S.kind] = defDims(S.kind));
+const saveS = () => { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (_) { } };
+
+/* ---------- geometria ---------- */
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const norm = a => { const l = Math.hypot(...a) || 1; return a.map(v => v / l); };
+// la base del solido (poligono in senso antiorario visto dall'alto) e l'ingombro A × B
+function shape() {
+  const d = dimsOf(), k = S.kind, r3 = Math.sqrt(3);
+  if (k === 'parallelepipedo') return { A: d.a, B: d.b, H: d.h, base: [[0, 0], [d.a, 0], [d.a, d.b], [0, d.b]], top: 'prism' };
+  if (k === 'cubo') return { A: d.l, B: d.l, H: d.l, base: [[0, 0], [d.l, 0], [d.l, d.l], [0, d.l]], top: 'prism' };
+  if (k === 'prisma3') { const B = d.l * r3 / 2; return { A: d.l, B, H: d.h, base: [[0, 0], [d.l, 0], [d.l / 2, B]], top: 'prism' }; }
+  if (k === 'prisma6') { const l = d.l, B = l * r3; return { A: 2 * l, B, H: d.h, base: [[l / 2, 0], [1.5 * l, 0], [2 * l, B / 2], [1.5 * l, B], [l / 2, B], [0, B / 2]], top: 'prism' }; }
+  if (k === 'piramide') return { A: d.l, B: d.l, H: d.h, base: [[0, 0], [d.l, 0], [d.l, d.l], [0, d.l]], top: 'apex' };
+  const r = d.d / 2, n = 48, base = Array.from({ length: n }, (_, i) => [r + r * Math.cos(i * 2 * Math.PI / n), r + r * Math.sin(i * 2 * Math.PI / n)]);
+  return { A: d.d, B: d.d, H: d.h, r, base, top: k === 'cilindro' ? 'prism' : 'apex', round: true };
+}
+// facce con le normali verso l'esterno, e spigoli con le due facce vicine
+function mesh(sh) {
+  const H = sh.H, b = sh.base, n = b.length, F = [];
+  const bot = b.map(p => [p[0], p[1], 0]);
+  F.push(bot.slice().reverse());
+  if (sh.top === 'prism') { const top = b.map(p => [p[0], p[1], H]); F.push(top); for (let i = 0; i < n; i++) { const j = (i + 1) % n; F.push([bot[i], bot[j], top[j], top[i]]); } }
+  else { const c = sh.round ? [sh.r, sh.r] : [sh.A / 2, sh.B / 2], V = [c[0], c[1], H]; for (let i = 0; i < n; i++) F.push([bot[i], bot[(i + 1) % n], V]); }
+  const cen = [sh.A / 2, sh.B / 2, H / 3], faces = F.map(P => {
+    let nn = [0, 0, 0]; for (let i = 0; i < P.length; i++) { const a = P[i], q = P[(i + 1) % P.length]; nn[0] += (a[1] - q[1]) * (a[2] + q[2]); nn[1] += (a[2] - q[2]) * (a[0] + q[0]); nn[2] += (a[0] - q[0]) * (a[1] + q[1]); }
+    nn = norm(nn); const fc = P.reduce((s, p) => [s[0] + p[0] / P.length, s[1] + p[1] / P.length, s[2] + p[2] / P.length], [0, 0, 0]);
+    if (dot3(nn, sub3(fc, cen)) < 0) { nn = nn.map(v => -v); P = P.slice().reverse(); }
+    return { P, n: nn };
+  });
+  const key = p => p.map(v => Math.round(v * 1e4)).join(','), E = new Map();
+  faces.forEach((f, fi) => f.P.forEach((a, i) => { const q = f.P[(i + 1) % f.P.length], k1 = key(a), k2 = key(q), k = k1 < k2 ? k1 + '|' + k2 : k2 + '|' + k1; if (!E.has(k)) E.set(k, { a, b: q, f: [] }); E.get(k).f.push(fi); }));
+  return { faces, edges: [...E.values()] };
+}
+// direzione verso chi guarda: quella che la proiezione schiaccia in un punto, rivolta verso l'alto
+function viewDir(T) { let k = norm(cross(T.M[0], T.M[1])); if (k[2] < 0) k = k.map(v => -v); return k; }
+
+/* ---------- il disegno sul foglio, passaggio per passaggio ----------
+   Foglio 33 × 24 orizzontale, squadratura a 1 cm. Coordinate del foglio in cm: origine nell'angolo in basso a sinistra, v verso l'alto.
+   Ogni segno ha il suo passaggio (ph) e uno stile: axis (assi), thin (costruzione 2H), vis (ripasso HB), hid (nascosto, tratteggiato), text. */
+const SHEET = { w: 33, h: 24, m: 1 };
+function build() {
+  const T = TYPES[S.type], sh = shape(), { A, B, H } = sh, ky = T.ky, d = dimsOf(), k = S.kind;
+  const items = [], steps = [];
+  const P0 = p => [dot3(T.M[0], p), dot3(T.M[1], p)]; // rispetto a O
+  const L = (a, b, st, ph) => items.push({ t: 'line', a: P0(a), b: P0(b), st, ph });
+  const PL = (pts, st, ph, closed) => items.push({ t: 'poly', pts: pts.map(P0), st, ph, closed: !!closed });
+  const TX = (p2, text, ph) => items.push({ t: 'text', p: p2, text, ph });
+  const AR = (r, a0, a1, ph) => items.push({ t: 'arc', c: [0, 0], r, a0, a1, ph }); // gradi, antiorario
+  const add2 = (a, b) => [a[0] + b[0], a[1] + b[1]], mul2 = (a, s) => [a[0] * s, a[1] * s], un2 = a => { const l = Math.hypot(a[0], a[1]) || 1; return [a[0] / l, a[1] / l]; };
+  const ax = [[1, 0, 0], [0, 1, 0], [0, 0, 1]].map(P0).map(un2);
+  const tick = (p3, dir2, ph, label, side) => { // segno sull'asse e la sua misura
+    const p = P0(p3), nr = [-dir2[1], dir2[0]], s = 0.25;
+    items.push({ t: 'line', a: add2(p, mul2(nr, s)), b: add2(p, mul2(nr, -s)), st: 'thin', ph });
+    if (label && S.labels) TX(add2(p, mul2(nr, (side || 1) * 0.75)), label, ph);
+  };
+  const vis = viewDir(T), M = mesh(sh), fv = M.faces.map(f => dot3(f.n, vis) > 1e-9);
+  const isR = !!sh.round, isApex = sh.top === 'apex';
+  // cerchio di base o di sopra (z), intero o un pezzo da t0 a t1: in monometrica resta un cerchio vero e in Tavola viva diventa un arco di compasso
+  const CIRC = (z, st, ph, t0, t1) => { const r = sh.r, a = t0 || 0, b = t1 === undefined ? 2 * Math.PI : t1, n = Math.max(8, Math.ceil(96 * (b - a) / (2 * Math.PI))), pts = [];
+    for (let i = 0; i <= n; i++) { const t = a + (b - a) * i / n; pts.push([r + r * Math.cos(t), r + r * Math.sin(t), z]); }
+    PL(pts, st, ph, false); items[items.length - 1].circ = { c: P0([r, r, z]), r, t0: a, t1: b }; };
+  const ELL = w => S.type === 'mono'
+    ? { title: 'Cerchio ' + w, text: 'In monometrica la pianta è vera: il cerchio resta un cerchio. Punta il compasso nell’incrocio delle mediane e traccialo con raggio ' + fmt(sh.r) + ' cm: tocca i lati del quadrato a metà.' }
+    : { title: 'Ellisse ' + w, text: 'Il cerchio diventa un’ellisse che tocca i lati del quadrato nei quattro punti medi (dove arrivano le mediane). Disegnala passando per quei punti.' };
+  const NM = KINDS[k].n.toLowerCase();
+
+  // 1 · assi
+  const ext = 2.5, ax3 = [[A + ext, 0, 0], [0, B + ext / ky, 0], [0, 0, H + ext]];
+  for (const e of ax3) L([0, 0, 0], e, 'axis', 1);
+  ['x', 'y', 'z'].forEach((n, i) => TX(add2(P0(ax3[i]), mul2(ax[i], 0.6)), n, 1));
+  TX([0.15, -0.65], 'O', 1);
+  const RA = 1.8;
+  if (S.type === 'iso') { items.push({ t: 'line', a: [-3, 0], b: [3, 0], st: 'thin', ph: 1 }); AR(RA, 0, 30, 1); AR(RA, 150, 180, 1); TX([RA + 0.75, 0.45], '30°', 1); TX([-RA - 0.75, 0.45], '30°', 1); }
+  else if (S.type === 'cav') { AR(1.3, 0, 45, 1); TX([1.25, -0.5], '45°', 1); }
+  else { items.push({ t: 'line', a: [-3, 0], b: [3, 0], st: 'thin', ph: 1 }); AR(RA, 0, 30, 1); AR(RA, 120, 180, 1); TX([RA + 0.75, 0.45], '30°', 1); TX([-RA - 0.55, 1.0], '60°', 1); }
+  const ASSI = {
+    iso: 'Traccia l’asse z verticale. Appoggia la squadra 30°/60° alla riga orizzontale e traccia l’asse y a 30° verso destra; poi gira la squadra (⇄ Gira) e traccia l’asse x a 30° verso sinistra.',
+    cav: 'Traccia l’asse x orizzontale e l’asse z verticale. Con la squadra 45° appoggiata alla riga traccia l’asse y a 45° verso destra, in alto.',
+    mono: 'Traccia l’asse z verticale. Con la squadra 30°/60° appoggiata alla riga traccia l’asse x a 30° verso destra; poi gira la squadra (⇄ Gira) e traccia l’asse y a 60° verso sinistra.'
+  }[S.type];
+  steps.push({ title: 'Assi', text: '@O ' + ASSI });
+
+  // 2 · misure sugli assi
+  // le misure vanno dalla parte di fuori del solido
+  tick([A, 0, 0], ax[0], 2, fmt(A), S.type === 'iso' ? 1 : -1); tick([0, B, 0], ax[1], 2, fmt(B * ky), S.type === 'iso' ? -1 : 1); tick([0, 0, H], ax[2], 2, fmt(H), 1);
+  const yName = k === 'prisma3' ? `l’altezza del triangolo di base (${fmt(d.l)} × 0,87 = ${fmt(B)} cm)` : k === 'prisma6' ? `la distanza fra i lati paralleli dell’esagono (${fmt(d.l)} × 1,73 = ${fmt(B)} cm)` : isR ? `il diametro (${fmt(B)} cm)` : `la profondità (${fmt(B)} cm)`;
+  const xName = k === 'prisma6' ? `la diagonale maggiore dell’esagono (2 × ${fmt(d.l)} = ${fmt(A)} cm)` : isR ? `il diametro (${fmt(A)} cm)` : k === 'cubo' ? `lo spigolo (${fmt(A)} cm)` : k === 'parallelepipedo' ? `la larghezza (${fmt(A)} cm)` : `il lato di base (${fmt(A)} cm)`;
+  steps.push({ title: 'Misure sugli assi', text: `Partendo da O riporta: su x ${xName}; su y ${yName}${ky < 1 ? `, ridotta a metà: ${fmt(B * ky)} cm` : ''}; su z l’altezza (${fmt(H)} cm).` });
+
+  // 3 · base (o rettangolo che la contiene)
+  L([A, 0, 0], [A, B, 0], 'thin', 3); L([0, B, 0], [A, B, 0], 'thin', 3);
+  const boxBase = k === 'parallelepipedo' || k === 'cubo' || k === 'piramide';
+  if (isR) { L([sh.r, 0, 0], [sh.r, B, 0], 'thin', 3); L([0, sh.r, 0], [A, sh.r, 0], 'thin', 3); }
+  steps.push({ title: boxBase ? 'Base' : isR ? 'Quadrato di base' : 'Rettangolo della base',
+    text: (boxBase ? 'Dal segno su x traccia la parallela all’asse y, dal segno su y la parallela all’asse x: ottieni la base.' : isR ? 'Dal segno su x traccia la parallela all’asse y, dal segno su y la parallela all’asse x: è il quadrato che contiene il cerchio di base. Traccia anche le due mediane: toccano il cerchio a metà dei lati.' : 'Dal segno su x traccia la parallela all’asse y, dal segno su y la parallela all’asse x: è il rettangolo che contiene la base.') + (S.type === 'iso' ? ' In isometrica viene un rombo.' : S.type === 'cav' && !isR ? ' In cavaliera viene un parallelogramma.' : '') });
+
+  // 4 · figura di base / centro
+  const b3 = sh.base.map(p => [p[0], p[1], 0]), t3 = sh.base.map(p => [p[0], p[1], H]), C0 = [A / 2, B / 2, 0], V3 = [A / 2, B / 2, H];
+  let ph = 4;
+  if (k === 'prisma3') { tick([A / 2, B, 0], ax[0], 4, fmt(A / 2), 1); L(b3[0], b3[2], 'thin', 4); L(b3[1], b3[2], 'thin', 4); steps.push({ title: 'Triangolo di base', text: `Segna il punto medio del lato di fondo (a ${fmt(A / 2)} cm) e uniscilo con i due estremi del lato davanti: è il triangolo di base.` }); ph++; }
+  else if (k === 'prisma6') {
+    for (const p of [b3[0], b3[1]]) tick(p, ax[0], 4, null); for (const p of [b3[3], b3[4]]) tick(p, ax[0], 4, null); for (const p of [b3[2], b3[5]]) tick(p, ax[1], 4, null);
+    for (let i = 0; i < 6; i++) { const j = (i + 1) % 6; if (i === 0 || i === 3) continue; L(b3[i], b3[j], 'thin', 4); }
+    steps.push({ title: 'Esagono di base', text: `Sui lati paralleli all’asse x segna i punti a ${fmt(d.l / 2)} cm dagli angoli; sui lati paralleli all’asse y segna il punto di mezzo. Unisci i sei punti: è l’esagono di base.` }); ph++;
+  }
+  else if (k === 'piramide' || k === 'cono') {
+    if (k === 'piramide') { L([0, 0, 0], [A, B, 0], 'thin', 4); L([A, 0, 0], [0, B, 0], 'thin', 4); }
+    if (k === 'cono') CIRC(0, 'thin', 4);
+    steps.push(k === 'piramide' ? { title: 'Centro della base', text: 'Traccia le due diagonali della base: si incontrano nel centro.' } : ELL('di base')); ph++;
+  }
+  else if (k === 'cilindro') { CIRC(0, 'thin', 4); steps.push(ELL('di base')); ph++; }
+
+  // 5 e 6 · altezze e parte di sopra
+  if (!isApex && !isR) {
+    b3.forEach((p, i) => L(p, t3[i], 'thin', ph));
+    steps.push({ title: 'Altezze', text: `Da ogni vertice della base traccia una verticale lunga ${fmt(H)} cm (squadra appoggiata alla riga).` }); ph++;
+    t3.forEach((p, i) => L(p, t3[(i + 1) % t3.length], 'thin', ph));
+    steps.push({ title: 'Faccia di sopra', text: 'Unisci le cime delle verticali: la faccia di sopra è uguale alla base.' }); ph++;
+  } else if (k === 'cilindro') {
+    const q = [[0, 0], [A, 0], [A, B], [0, B]];
+    q.forEach(p => L([p[0], p[1], 0], [p[0], p[1], H], 'thin', ph));
+    q.forEach((p, i) => { const r = q[(i + 1) % 4]; L([p[0], p[1], H], [r[0], r[1], H], 'thin', ph); });
+    L([sh.r, 0, H], [sh.r, B, H], 'thin', ph); L([0, sh.r, H], [A, sh.r, H], 'thin', ph);
+    steps.push({ title: 'Quadrato di sopra', text: `Dai quattro vertici del quadrato traccia le verticali lunghe ${fmt(H)} cm e unisci le cime: è il quadrato della faccia di sopra. Traccia anche le sue mediane.` }); ph++;
+    CIRC(H, 'thin', ph);
+    const e = ELL('di sopra'); e.text = S.type === 'mono' ? 'Traccia il cerchio di sopra come quello di base, con il compasso puntato nell’incrocio delle mediane del quadrato di sopra.' : 'Disegna l’ellisse di sopra come quella di base, passando per i punti medi del quadrato di sopra.';
+    steps.push(e); ph++;
+  } else {
+    L(C0, V3, 'thin', ph); tick(V3, ax[0], ph, 'V', 1);
+    steps.push({ title: 'Altezza e vertice', text: `Dal centro della base traccia la verticale e riporta l’altezza: ${fmt(H)} cm. In cima c’è il vertice V.` }); ph++;
+    if (k === 'piramide') { b3.forEach(p => L(p, V3, 'thin', ph)); steps.push({ title: 'Spigoli laterali', text: 'Unisci il vertice V con i quattro vertici della base.' }); ph++; }
+  }
+
+  // contorno di cilindro e cono: generatrici che toccano l'ellisse
+  let gen = [];
+  if (isR) {
+    const vx = vis[0], vy = vis[1], vz = vis[2], rho = Math.hypot(vx, vy), phi = Math.atan2(vy, vx), r = sh.r;
+    let dth = Math.PI / 2;
+    if (k === 'cono') { const c = -r * vz / (H * rho); dth = Math.abs(c) <= 1 ? Math.acos(c) : null; }
+    if (dth !== null) gen = [phi + dth, phi - dth].map(t => [r + r * Math.cos(t), r + r * Math.sin(t), 0]);
+    if (k === 'cono') {
+      gen.forEach(p => L(p, V3, 'thin', ph));
+      steps.push({ title: 'Generatrici di contorno', text: 'Da V traccia le due linee che toccano l’ellisse ai lati: sono il contorno del cono.' }); ph++;
+    }
+  }
+
+  // ultimo · ripasso in HB
+  if (!isR) {
+    for (const e of M.edges) { const v = e.f.some(i => fv[i]); if (v) L(e.a, e.b, 'vis', ph); else if (S.hidden) L(e.a, e.b, 'hid', ph); }
+    steps.push({ title: 'Ripasso', text: 'Ripassa con la matita HB gli spigoli che si vedono.' + (S.hidden ? ' Gli spigoli nascosti si tratteggiano.' : ' Gli spigoli nascosti non si ripassano.') });
+  } else {
+    // anello di base diviso in parte che si vede e parte nascosta
+    const r = sh.r;
+    if (!gen.length) CIRC(0, 'vis', ph); // cono molto basso: si vede tutto
+    else { // l'anello di base, diviso nei punti di contorno: davanti si vede, dietro è nascosto
+      const tg = gen.map(p => Math.atan2(p[1] - r, p[0] - r)), t0 = Math.min(...tg), t1 = Math.max(...tg), mid = (t0 + t1) / 2;
+      const back = k === 'cilindro' ? Math.cos(mid) * vis[0] + Math.sin(mid) * vis[1] > 0 : H * (Math.cos(mid) * vis[0] + Math.sin(mid) * vis[1]) + r * vis[2] > 0; // vero se l'arco fra t0 e t1 è quello che si vede
+      if (!back) { CIRC(0, 'vis', ph, t1, t0 + 2 * Math.PI); if (S.hidden) CIRC(0, 'hid', ph, t0, t1); }
+      else { CIRC(0, 'vis', ph, t0, t1); if (S.hidden) CIRC(0, 'hid', ph, t1, t0 + 2 * Math.PI); }
+    }
+    if (k === 'cilindro') { CIRC(H, 'vis', ph); gen.forEach(p => L(p, [p[0], p[1], H], 'vis', ph)); }
+    else gen.forEach(p => L(p, V3, 'vis', ph));
+    steps.push({ title: 'Ripasso', text: k === 'cilindro' ? 'Ripassa con la matita HB il contorno: l’ellisse di sopra, la metà davanti dell’ellisse di base e le due verticali che toccano le ellissi ai lati.' + (S.hidden ? ' La metà dietro dell’ellisse di base si tratteggia.' : '') : 'Ripassa con la matita HB il contorno: le due generatrici e la parte davanti dell’ellisse di base.' + (S.hidden ? ' La parte dietro si tratteggia.' : '') });
+  }
+
+  // posizione di O: il disegno al centro della squadratura, O su mezzi centimetri
+  const bb = bbox(items), cx = (SHEET.w) / 2 - (bb[0] + bb[2]) / 2, cy = (SHEET.h) / 2 - (bb[1] + bb[3]) / 2;
+  const O = [Math.round(cx * 2) / 2, Math.round(cy * 2) / 2];
+  for (const it of items) { if (it.circ) it.circ.c = add2(it.circ.c, O); if (it.a) { it.a = add2(it.a, O); it.b = add2(it.b, O); } if (it.pts) it.pts = it.pts.map(p => add2(p, O)); if (it.p) it.p = add2(it.p, O); if (it.c) it.c = add2(it.c, O); }
+  const posO = `Segna il punto O a ${fmt(O[0] - SHEET.m)} cm dal lato sinistro della squadratura e a ${fmt(O[1] - SHEET.m)} cm dal lato in basso.`;
+  steps[0].text = steps[0].text.replace('@O', posO);
+  const W = bb[2] - bb[0], Hh = bb[3] - bb[1], inW = SHEET.w - 2 * SHEET.m, inH = SHEET.h - 2 * SHEET.m;
+  const over = W > inW + 1e-6 || Hh > inH + 1e-6 ? { w: Math.max(0, W - inW), h: Math.max(0, Hh - inH) } : null;
+  return { items, steps, O, over, sh };
+}
+function bbox(items) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; const ad = p => { x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]); };
+  for (const it of items) { if (it.a) { ad(it.a); ad(it.b); } if (it.pts) it.pts.forEach(ad); if (it.p) { ad([it.p[0] - 0.4, it.p[1] - 0.3]); ad([it.p[0] + 0.4, it.p[1] + 0.3]); } }
+  return [x0, y0, x1, y1];
+}
+
+/* ---------- disegnare il foglio (sullo schermo e nei PDF) ---------- */
+const FF = () => getComputedStyle(document.body).fontFamily;
+// upto: fino a quale passaggio; hi: il passaggio da evidenziare (0 = nessuno)
+function paintSheet(g, X, Y, k, D, upto, hi, opt) {
+  opt = opt || {};
+  const w = SHEET.w * k, h = SHEET.h * k;
+  g.fillStyle = '#fff'; g.fillRect(X(0), Y(SHEET.h), w, h);
+  g.setLineDash([]); g.strokeStyle = '#8f9a9e'; g.lineWidth = 1; g.strokeRect(X(0) + 0.5, Y(SHEET.h) + 0.5, w - 1, h - 1);
+  g.strokeStyle = D.over ? '#d63a1f' : '#1c2126'; g.lineWidth = Math.max(1, (D.over ? 0.08 : 0.05) * k); g.strokeRect(X(SHEET.m), Y(SHEET.h - SHEET.m), (SHEET.w - 2 * SHEET.m) * k, (SHEET.h - 2 * SHEET.m) * k);
+  const ST = { axis: [0.02, 1.1, '#5b6670', []], thin: [0.015, 1, '#6d7880', []], vis: [0.05, 2.4, '#111', []], hid: [0.025, 1.3, '#333', [0.25, 0.15]] };
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  // prima il resto, poi le linee del passaggio evidenziato (sopra a tutto)
+  const order = D.items.filter(it => it.ph <= upto).sort((a, b) => (a.ph === hi) - (b.ph === hi));
+  for (const it of order) {
+    const now = hi && it.ph === hi;
+    if (it.t === 'text') { g.setLineDash([]); g.fillStyle = now ? NEW : '#1c2126'; g.font = `700 ${Math.max(10, 0.42 * k)}px ${FF()}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(it.text, X(it.p[0]), Y(it.p[1])); continue; }
+    if (it.t === 'arc') { g.setLineDash([]); g.strokeStyle = now ? NEW : '#6d7880'; g.lineWidth = Math.max(now ? 2 : 1, 0.015 * k); g.beginPath(); g.arc(X(it.c[0]), Y(it.c[1]), it.r * k, -it.a1 * DEG, -it.a0 * DEG); g.stroke(); continue; }
+    const s = ST[it.st]; g.lineWidth = Math.max(now ? Math.max(2.2, s[1]) : s[1], s[0] * k); g.strokeStyle = now ? NEW : s[2]; g.setLineDash(s[3].map(v => v * k));
+    g.beginPath();
+    if (it.t === 'line') { g.moveTo(X(it.a[0]), Y(it.a[1])); g.lineTo(X(it.b[0]), Y(it.b[1])); }
+    else { it.pts.forEach((p, i) => i ? g.lineTo(X(p[0]), Y(p[1])) : g.moveTo(X(p[0]), Y(p[1]))); if (it.closed) g.closePath(); }
+    g.stroke();
+  }
+  g.setLineDash([]);
+}
+
+/* ---------- schermo ---------- */
+const cv = $('#cv'), stage = $('#stage'), G = cv.getContext('2d');
+let DPR = 1, CW = 0, CH = 0, DATA = null;
+const MAXPX = 1.8e6;
+function layout() { const r = stage.getBoundingClientRect(); CW = r.width; CH = r.height; DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, Math.sqrt(MAXPX / Math.max(1, CW * CH)))); cv.width = Math.round(CW * DPR); cv.height = Math.round(CH * DPR); layout3(); draw(); }
+let raf = 0; const draw = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; render(); }); };
+function render() {
+  G.setTransform(DPR, 0, 0, DPR, 0, 0); G.clearRect(0, 0, CW, CH);
+  if (!DATA) return;
+  const sb = $('#stepBox').getBoundingClientRect(), top = Math.min(CH * 0.4, sb.height + 24), pad = 14;
+  const k = Math.min((CW - 2 * pad) / SHEET.w, (CH - top - pad) / SHEET.h), ox = (CW - SHEET.w * k) / 2, oy = top + (CH - top - pad - SHEET.h * k) / 2;
+  G.save(); G.shadowColor = '#1d282b33'; G.shadowBlur = 14; G.shadowOffsetY = 3; G.fillStyle = '#fff'; G.fillRect(ox, oy, SHEET.w * k, SHEET.h * k); G.restore();
+  const n = DATA.steps.length, st = clamp(S.step, 0, n - 1) + 1;
+  paintSheet(G, u => ox + u * k, v => oy + (SHEET.h - v) * k, k, DATA, st, st === n ? 0 : st);
+}
+function rebuild() {
+  DATA = build(); S.step = clamp(S.step, 0, DATA.steps.length - 1);
+  const n = DATA.steps.length, i = S.step, s = DATA.steps[i];
+  $('#stepBox').innerHTML = `<b>${i + 1} · ${esc(s.title)}</b>${esc(s.text)}`;
+  $('#stepTxt').textContent = `Passaggio ${i + 1} di ${n}`;
+  $('#dots').innerHTML = DATA.steps.map((_, j) => `<i class="${j <= i ? 'on' : ''}"></i>`).join('');
+  $('#prevBtn').disabled = i === 0; $('#nextBtn').disabled = i === n - 1; $('#allBtn').disabled = i === n - 1;
+  const w = $('#warn'); if (DATA.over) { w.hidden = false; w.innerHTML = `⚠ Il disegno non sta nel foglio 33 × 24: esce di ${[DATA.over.w > 0 ? fmt(DATA.over.w) + ' cm in larghezza' : '', DATA.over.h > 0 ? fmt(DATA.over.h) + ' cm in altezza' : ''].filter(Boolean).join(' e ')}. Riduci le misure.`; } else w.hidden = true;
+  document.querySelectorAll('.sol').forEach(b => b.classList.toggle('on', b.dataset.s === S.kind));
+  draw(); draw3();
+}
+function changed(keepStep) { if (!keepStep) S.step = 0; saveS(); renderSide(); rebuild(); }
+
+/* ---------- pannello a destra ---------- */
+function renderSide() {
+  const d = dimsOf(), T = TYPES[S.type];
+  $('#side').innerHTML = `<div class="ttl">${esc(KINDS[S.kind].n)}</div>
+    <div class="k2">Assonometria</div>
+    ${Object.entries(TYPES).map(([id, t]) => `<button class="typ ${S.type === id ? 'on' : ''}" data-t="${id}">${t.n}</button>`).join('')}
+    <div class="desc">${esc(T.desc)}</div>
+    <div class="sp"></div>
+    <div class="k2">Misure (cm)</div>
+    ${KINDS[S.kind].dims.map(([key, lab]) => `<div class="fld"><span class="k">${lab}</span><div class="step"><button data-d="${key}" data-v="-0.5" aria-label="Meno">−</button><span class="v">${fmt(d[key])}</span><button data-d="${key}" data-v="0.5" aria-label="Più">+</button></div></div>`).join('')}
+    <div class="sp"></div>
+    <button class="tog ${S.hidden ? 'on' : ''}" data-o="hidden">Spigoli nascosti tratteggiati</button>
+    <button class="tog ${S.labels ? 'on' : ''}" data-o="labels">Misure sul disegno</button>
+    <button class="tog ${S.show3d ? 'on' : ''}" data-o="show3d">Solido 3D</button>
+    <div class="sp"></div>
+    <button class="side-btn" id="openPdf">Riapri un PDF salvato…</button>
+    <div class="desc">Il lavoro resta in questo browser. I PDF contengono i dati per riaprirlo.</div>`;
+}
+$('#side').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.t) { S.type = b.dataset.t; aim3(); changed(); }
+  else if (b.dataset.d) { const d = dimsOf(), key = b.dataset.d; d[key] = clamp(Math.round((d[key] + +b.dataset.v) * 2) / 2, 1, 25); changed(true); }
+  else if (b.dataset.o) { S[b.dataset.o] = !S[b.dataset.o]; if (b.dataset.o === 'show3d') layout3(); changed(true); }
+  else if (b.id === 'openPdf') $('#fileIn').click();
+});
+document.querySelectorAll('.sol').forEach(b => b.onclick = () => { S.kind = b.dataset.s; changed(); });
+$('#prevBtn').onclick = () => { S.step = Math.max(0, S.step - 1); saveS(); rebuild(); };
+$('#nextBtn').onclick = () => { S.step = Math.min(DATA.steps.length - 1, S.step + 1); saveS(); rebuild(); };
+$('#allBtn').onclick = () => { S.step = DATA.steps.length - 1; saveS(); rebuild(); };
+document.addEventListener('keydown', e => { if (e.key === 'ArrowRight' || e.key === 'PageDown') $('#nextBtn').click(); else if (e.key === 'ArrowLeft' || e.key === 'PageUp') $('#prevBtn').click(); });
+
+/* ---------- il solido in 3D (si gira trascinando) ---------- */
+// il solido 3D si presenta girato come nel disegno: guardato dalla stessa direzione dell'assonometria
+function aim3() { const v = viewDir(TYPES[S.type]); S.yaw = Math.atan2(v[1], v[0]) / DEG; S.pitch = Math.asin(clamp(v[2], -1, 1)) / DEG; }
+const c3 = $('#c3'), G3 = c3.getContext('2d'); let W3 = 0, H3 = 0, D3 = 1;
+function layout3() { $('#box3d').hidden = !S.show3d; if (!S.show3d) return; const r = c3.getBoundingClientRect(); W3 = r.width; H3 = r.height; D3 = Math.max(1, Math.min(2, window.devicePixelRatio || 1)); c3.width = Math.round(W3 * D3); c3.height = Math.round(H3 * D3); draw3(); }
+function paint3(g, w, h, yaw, pitch) { // vista ortogonale del solido, con le facce in ombra
+  const sh = shape(), M = mesh(sh), cy = Math.cos(yaw * DEG), sy = Math.sin(yaw * DEG), cp = Math.cos(pitch * DEG), sp = Math.sin(pitch * DEG);
+  const R = [-sy, cy, 0], U = [-cy * sp, -sy * sp, cp], Vw = [cy * cp, sy * cp, sp]; // destra, su, verso chi guarda
+  const c = [sh.A / 2, sh.B / 2, sh.H / 2], pts = M.faces.flatMap(f => f.P), pr = p => { const q = sub3(p, c); return [dot3(q, R), dot3(q, U)]; };
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity; for (const p of pts) { const [u, v] = pr(p); x0 = Math.min(x0, u); x1 = Math.max(x1, u); y0 = Math.min(y0, v); y1 = Math.max(y1, v); }
+  const s = Math.min(w * 0.78 / (x1 - x0 || 1), h * 0.7 / (y1 - y0 || 1)), mx = (x0 + x1) / 2, my = (y0 + y1) / 2, S2 = p => { const [u, v] = pr(p); return [w / 2 + (u - mx) * s, h / 2 + 6 - (v - my) * s]; };
+  const L = norm([-0.4, -0.7, 0.9]), base = [parseInt(TH.accent.slice(1, 3), 16), parseInt(TH.accent.slice(3, 5), 16), parseInt(TH.accent.slice(5, 7), 16)];
+  const vf = M.faces.map(f => dot3(f.n, Vw) > 1e-9);
+  M.faces.forEach((f, i) => { if (!vf[i]) return; const lt = 0.55 + 0.45 * Math.max(0, dot3(f.n, L)), col = base.map(v => Math.round(255 - (255 - v) * 0.55 * (1.25 - lt * 0.5))); g.beginPath(); f.P.forEach((p, j) => { const q = S2(p); j ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]); }); g.closePath(); g.fillStyle = `rgb(${col.join(',')})`; g.fill(); g.lineWidth = 1; g.strokeStyle = g.fillStyle; g.stroke(); });
+  g.lineWidth = 1.6; g.strokeStyle = '#1c2126'; g.lineCap = 'round';
+  for (const e of M.edges) { const a = vf[e.f[0]], b = vf[e.f[1]]; if (!a && !b) continue; const sharp = dot3(M.faces[e.f[0]].n, M.faces[e.f[1]].n) < 0.97; if (!sharp && a === b) continue; const p = S2(e.a), q = S2(e.b); g.beginPath(); g.moveTo(p[0], p[1]); g.lineTo(q[0], q[1]); g.stroke(); }
+}
+function draw3() { if (!S.show3d || !W3) return; G3.setTransform(D3, 0, 0, D3, 0, 0); G3.clearRect(0, 0, W3, H3); paint3(G3, W3, H3, S.yaw, S.pitch); }
+let drag3 = null;
+c3.addEventListener('pointerdown', e => { c3.setPointerCapture(e.pointerId); drag3 = { x: e.clientX, y: e.clientY, yaw: S.yaw, pitch: S.pitch }; c3.style.cursor = 'grabbing'; });
+c3.addEventListener('pointermove', e => { if (!drag3) return; S.yaw = drag3.yaw - (e.clientX - drag3.x) * 0.6; S.pitch = clamp(drag3.pitch + (e.clientY - drag3.y) * 0.4, -10, 85); draw3(); });
+const up3 = () => { if (drag3) { drag3 = null; c3.style.cursor = ''; saveS(); } };
+c3.addEventListener('pointerup', up3); c3.addEventListener('pointercancel', up3);
+
+/* ================= PDF (A4), con dentro i dati per riaprire ================= */
+let toastT = 0;
+function toast(msg, kind) { const el = $('#toast'); el.textContent = msg; el.className = 'show' + (kind ? ' ' + kind : ''); clearTimeout(toastT); toastT = setTimeout(() => el.className = '', kind === 'warn' ? 4200 : 2800); }
+const APP_URL = /^https?:$/.test(location.protocol) && !/claude\.ai|claudeusercontent/.test(location.hostname) ? location.origin + location.pathname : 'https://giulitecnologia.github.io/tavola-viva/assonometrie.html';
+const title = () => `${KINDS[S.kind].n} in assonometria ${TYPES[S.type].n.toLowerCase()}`;
+const safeName = t => (t || 'assonometria').replace(/[^\w\-àèéìòù ]+/gi, '').trim().replace(/\s+/g, '-') || 'assonometria';
+const measures = () => KINDS[S.kind].dims.map(([k, l]) => `${l}: ${fmt(dimsOf()[k])} cm`);
+function sheetPage(K, upto, hi) { // il foglio 33 × 24 intero
+  const c = document.createElement('canvas'); c.width = Math.round(SHEET.w * K); c.height = Math.round(SHEET.h * K); const g = c.getContext('2d');
+  paintSheet(g, u => u * K, v => (SHEET.h - v) * K, K, DATA, upto, hi);
+  return { c, w: SHEET.w, h: SHEET.h };
+}
+function wrap(g, text, x, y, maxW, lh) { const words = text.split(' '); let line = ''; for (const w of words) { const t = line ? line + ' ' + w : w; if (g.measureText(t).width > maxW && line) { g.fillText(line, x, y); y += lh; line = w; } else line = t; } if (line) { g.fillText(line, x, y); y += lh; } return y; }
+function consegnaPage() {
+  const K = 50, PW = 29.7, PH = 21, mg = 1.2, c = document.createElement('canvas'); c.width = PW * K; c.height = PH * K; const g = c.getContext('2d'), ff = FF();
+  g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.textBaseline = 'alphabetic'; g.textAlign = 'left';
+  g.fillStyle = '#1c2126'; g.font = `700 ${0.75 * K}px ${ff}`; g.fillText(title(), mg * K, 1.8 * K);
+  g.fillStyle = TH.accent; g.font = `600 ${0.42 * K}px ${ff}`; g.fillText('Assonometrie · consegna', mg * K, 2.55 * K);
+  g.fillStyle = '#1c2126'; g.font = `400 ${0.42 * K}px ${ff}`;
+  let y = wrap(g, `Disegna sul foglio 33 × 24 ${KINDS[S.kind].art} ${KINDS[S.kind].n.toLowerCase()} in assonometria ${TYPES[S.type].n.toLowerCase()}. ${TYPES[S.type].desc}`, mg * K, 3.5 * K, (PW - 2 * mg) * K, 0.6 * K);
+  const im = document.createElement('canvas'); im.width = 1200; im.height = 1000; paint3(im.getContext('2d'), 1200, 1000, S.yaw, S.pitch);
+  const ah = PH - y / K - mg, aw = 16, sc = Math.min(aw * K / im.width, ah * K / im.height); g.drawImage(im, mg * K, y + 0.2 * K, im.width * sc, im.height * sc);
+  let x = (mg + aw + 1) * K; y += 1.2 * K; g.fillStyle = TH.accent; g.font = `700 ${0.5 * K}px ${ff}`; g.fillText('Misure', x, y); y += 0.8 * K;
+  g.fillStyle = '#1c2126'; g.font = `400 ${0.45 * K}px ${ff}`; for (const m of measures()) { g.fillText(m, x, y); y += 0.7 * K; }
+  if (S.type === 'cav') { g.fillStyle = '#5b6b6f'; g.font = `400 ${0.38 * K}px ${ff}`; y = wrap(g, 'Ricorda: in cavaliera la profondità si dimezza.', x, y + 0.2 * K, (PW - mg) * K - x, 0.55 * K); }
+  return { c, w: PW, h: PH };
+}
+function stepsPages() { // 4 passaggi per pagina A4 orizzontale, numerati
+  const K = 46, PW = 29.7, PH = 21, mg = 0.8, ff = FF(), n = DATA.steps.length, pages = [];
+  const cw = (PW - 3 * mg) / 2, chh = (PH - 3 * mg) / 2, txtH = 2.2, sk = Math.min(cw / SHEET.w, (chh - txtH) / SHEET.h);
+  for (let p0 = 0; p0 < n; p0 += 4) {
+    const c = document.createElement('canvas'); c.width = PW * K; c.height = PH * K; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+    for (let j = 0; j < 4 && p0 + j < n; j++) {
+      const i = p0 + j, x0 = mg + (j % 2) * (cw + mg), y0 = mg + Math.floor(j / 2) * (chh + mg), kk = sk * K, ox = (x0 + (cw - SHEET.w * sk) / 2) * K, oy = y0 * K;
+      paintSheet(g, u => ox + u * kk, v => oy + (SHEET.h - v) * kk, kk, DATA, i + 1, i + 1 === n ? 0 : i + 1);
+      g.fillStyle = '#1c2126'; g.textAlign = 'left'; g.textBaseline = 'alphabetic'; g.font = `700 ${0.36 * K}px ${ff}`;
+      const ty = oy + SHEET.h * kk + 0.5 * K; g.fillText(`${i + 1} · ${DATA.steps[i].title}`, x0 * K, ty);
+      g.font = `400 ${0.27 * K}px ${ff}`; wrap(g, DATA.steps[i].text, x0 * K, ty + 0.4 * K, cw * K, 0.36 * K);
+    }
+    pages.push({ c, w: PW, h: PH });
+  }
+  return pages;
+}
+function jpegBytes(c) { const d = atob(c.toDataURL('image/jpeg', 0.92).split(',')[1]), u = new Uint8Array(d.length); for (let i = 0; i < d.length; i++) u[i] = d.charCodeAt(i); return u; }
+function makePDF(P, data, link) { // pagine A4 con le immagini, i dati nascosti e il pulsante «Apri nelle Assonometrie» (solo a schermo, non si stampa)
+  const n = P.length, enc = new TextEncoder(), parts = [], offs = []; let pos = 0;
+  const put = x => { const b = typeof x === 'string' ? enc.encode(x) : x; parts.push(b); pos += b.length; };
+  const obj = (id, body) => { offs[id] = pos; put(id + ' 0 obj\n'); body(); put('\nendobj\n'); };
+  const pt = cm => (cm * 72 / 2.54).toFixed(2);
+  const fit = p => { const PW = p.w >= p.h ? 29.7 : 21, PH = p.w >= p.h ? 21 : 29.7, K = Math.min(1, (PW - 1) / p.w, (PH - 1) / p.h); return { PW, PH, K, OX: (PW - p.w * K) / 2, OY: (PH - p.h * K) / 2 }; };
+  const btn = link ? 4 : 0, first = 4 + (btn ? 4 : 0);
+  put('%PDF-1.4\n%âãÏÓ\n');
+  obj(1, () => put('<< /Type /Catalog /Pages 2 0 R /Assonometrie 3 0 R >>'));
+  obj(2, () => put(`<< /Type /Pages /Count ${n} /Kids [${P.map((_, i) => (first + 3 * i) + ' 0 R').join(' ')}] >>`));
+  obj(3, () => { const t = `%ASSONOMETRIE-INIZIO\n${data}\n%ASSONOMETRIE-FINE`; put(`<< /Length ${t.length} >>\nstream\n${t}\nendstream`); });
+  if (btn) {
+    const p = P[0], A = fit(p), label = 'Apri nelle Assonometrie', fs = 11, bw = 6.8, bh = 0.72, x0 = A.PW - 0.5 - bw, y0 = A.PH - 0.35 - bh;
+    const R = `[${pt(x0)} ${pt(y0)} ${pt(x0 + bw)} ${pt(y0 + bh)}]`, BW = pt(bw), BH = pt(bh), mc = document.createElement('canvas').getContext('2d'); mc.font = `bold ${fs}px Arial, Helvetica, sans-serif`; const tw = mc.measureText(label).width;
+    const ap = `0.122 0.361 0.271 rg 0 0 ${BW} ${BH} re f BT /F1 ${fs} Tf 1 1 1 rg ${((bw * 72 / 2.54 - tw) / 2).toFixed(2)} ${((bh * 72 / 2.54 - fs * 0.72) / 2).toFixed(2)} Td (${label}) Tj ET`;
+    obj(4, () => put(`<< /Type /Annot /Subtype /Stamp /Rect ${R} /F 0 /Contents (${label}) /AP << /N 6 0 R >> >>`));
+    obj(5, () => put(`<< /Type /Annot /Subtype /Link /Rect ${R} /Border [0 0 0] /A << /S /URI /URI (${link}) >> >>`));
+    obj(6, () => put(`<< /Type /XObject /Subtype /Form /BBox [0 0 ${BW} ${BH}] /Resources << /Font << /F1 7 0 R >> >> /Length ${ap.length} >>\nstream\n${ap}\nendstream`));
+    obj(7, () => put('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>'));
+  }
+  P.forEach((p, i) => {
+    const A = fit(p), id = first + 3 * i, img = jpegBytes(p.c), cs = `q ${pt(p.w * A.K)} 0 0 ${pt(p.h * A.K)} ${pt(A.OX)} ${pt(A.OY)} cm /Im0 Do Q`;
+    obj(id, () => put(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pt(A.PW)} ${pt(A.PH)}] /Resources << /XObject << /Im0 ${id + 2} 0 R >> >> /Contents ${id + 1} 0 R${btn && i === 0 ? ' /Annots [4 0 R 5 0 R]' : ''} >>`));
+    obj(id + 1, () => put(`<< /Length ${cs.length} >>\nstream\n${cs}\nendstream`));
+    obj(id + 2, () => { put(`<< /Type /XObject /Subtype /Image /Width ${p.c.width} /Height ${p.c.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${img.length} >>\nstream\n`); put(img); put('\nendstream'); });
+  });
+  const total = first + 3 * n, xref = pos;
+  let x = `xref\n0 ${total}\n0000000000 65535 f \n`; for (let k = 1; k < total; k++) x += String(offs[k]).padStart(10, '0') + ' 00000 n \n';
+  put(x + `trailer\n<< /Size ${total} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+  return new Blob(parts, { type: 'application/pdf' });
+}
+async function packData(o) {
+  const cs = new Blob([JSON.stringify(o)]).stream().pipeThrough(new CompressionStream('deflate-raw')), u8 = new Uint8Array(await new Response(cs).arrayBuffer());
+  let bin = ''; for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+async function unpackData(b64) {
+  const bin = atob(b64.replace(/-/g, '+').replace(/_/g, '/')), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return JSON.parse(await new Response(new Blob([u8]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text());
+}
+const snapData = () => ({ app: 'assonometrie', kind: S.kind, type: S.type, dims: { [S.kind]: dimsOf() }, hidden: S.hidden, labels: S.labels, yaw: S.yaw, pitch: S.pitch });
+function loadData(o) {
+  if (!o || o.app !== 'assonometrie' || !KINDS[o.kind]) { toast('Questo non è un esercizio delle Assonometrie.', 'warn'); return false; }
+  S.kind = o.kind; S.type = TYPES[o.type] ? o.type : 'iso'; S.dims[o.kind] = Object.assign(defDims(o.kind), (o.dims || {})[o.kind] || {});
+  for (const k of ['hidden', 'labels', 'yaw', 'pitch']) if (k in o) S[k] = o[k];
+  changed(); return true;
+}
+async function pdf(which) {
+  const pages = which === 'con' ? [consegnaPage()] : which === 'sol' ? [consegnaPage(), sheetPage(80, DATA.steps.length, 0)] : stepsPages();
+  const data = await packData(snapData()), link = APP_URL + '#esercizio=' + data;
+  return makePDF(pages, data, link.length < 1e6 ? link : null);
+}
+function downloadBlob(blob, name) { const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); toast('Download avviato: ' + name); }
+$('#pdfCon').onclick = () => pdf('con').then(p => downloadBlob(p, safeName(title()) + '-consegna.pdf'));
+$('#pdfSol').onclick = () => pdf('sol').then(p => downloadBlob(p, safeName(title()) + '-consegna-e-soluzione.pdf'));
+$('#pdfSteps').onclick = () => pdf('steps').then(p => downloadBlob(p, safeName(title()) + '-passaggi.pdf'));
+async function openBuf(buf) {
+  const t = new TextDecoder('latin1').decode(new Uint8Array(buf)), m = /%ASSONOMETRIE-INIZIO\n([A-Za-z0-9_-]+)\n%ASSONOMETRIE-FINE/.exec(t);
+  if (!m) { toast(/%TAVOLAVIVA-INIZIO/.test(t) ? 'Questa è una tavola: aprila in Tavola viva.' : /%PROIEZIONI-INIZIO/.test(t) ? 'Questo è un esercizio delle Proiezioni: aprilo da lì.' : 'Questo file non contiene un esercizio delle Assonometrie.', 'warn'); return false; }
+  try { const ok = loadData(await unpackData(m[1])); if (ok) toast('Aperto: ' + title()); return ok; } catch (_) { toast('Non sono riuscita a leggere l’esercizio.', 'warn'); return false; }
+}
+$('#fileIn').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) f.arrayBuffer().then(openBuf); });
+
+/* ---------- Porta in Tavola viva: il disegno diventa segni veri, con un passaggio per ogni fase ---------- */
+function toTavola() {
+  if (DATA.over) { toast('Il disegno non sta nel foglio: riduci le misure prima di portarlo in Tavola viva.', 'warn'); return; }
+  const r = v => Math.round(v * 1000) / 1000, X = u => r(u), Y = v => r(SHEET.h - v), st = [];
+  const PEN = { axis: ['2H', false], thin: ['2H', false], vis: ['HB', false], hid: ['2H', true] };
+  for (const o of DATA.items) {
+    if (o.t === 'line') { const [pen, dash] = PEN[o.st]; st.push({ type: 'line', x1: X(o.a[0]), y1: Y(o.a[1]), x2: X(o.b[0]), y2: Y(o.b[1]), pen, dash, ph: o.ph }); }
+    else if (o.t === 'poly' && o.circ && S.type === 'mono') { const c = o.circ; st.push({ type: 'arc', cx: X(c.c[0]), cy: Y(c.c[1]), r: r(c.r), a0: -(c.t0 + 30 * DEG), sw: -(c.t1 - c.t0), pen: PEN[o.st][0], dash: PEN[o.st][1], ph: o.ph }); } // in monometrica: arco di compasso (la pianta è ruotata di 30°)
+    else if (o.t === 'poly') { const [pen, dash] = PEN[o.st], pts = o.pts.map(p => [X(p[0]), Y(p[1])]); if (o.closed) pts.push(pts[0]); st.push({ type: 'free', pts, pen, dash, ph: o.ph }); }
+    else if (o.t === 'arc') st.push({ type: 'arc', cx: X(o.c[0]), cy: Y(o.c[1]), r: r(o.r), a0: -o.a0 * DEG, sw: -(o.a1 - o.a0) * DEG, pen: '2H', dash: false, ph: o.ph });
+    else if (o.t === 'text') st.push({ type: 'label', x: X(o.p[0]), y: Y(o.p[1]), text: o.text, ph: o.ph });
+  }
+  try { localStorage.setItem('tavolaviva.importa', JSON.stringify({ name: title(), what: 'assonometria', sheet: { w: SHEET.w, h: SHEET.h, margin: SHEET.m }, strokes: st })); }
+  catch (_) { toast('Non sono riuscita a preparare il foglio.', 'warn'); return; }
+  saveS(); location.href = 'index.html#importa';
+}
+$('#tavBtn').onclick = toTavola;
+$('#fsBtn').onclick = () => { const el = document.documentElement; try { document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen(); } catch (_) { } };
+
+/* ---------- avvio ---------- */
+new ResizeObserver(layout).observe(stage);
+renderSide(); rebuild(); layout();
+if (location.hash.startsWith('#esercizio=')) { const b64 = location.hash.slice(11); history.replaceState(null, '', location.pathname + location.search);
+  unpackData(b64).then(o => { if (loadData(o)) toast('Aperto: ' + title()); }, () => toast('Non sono riuscita ad aprire l’esercizio.', 'warn')); }
+window.__tvPronta = true; // avvio completato
+window.AS = { S, get DATA() { return DATA; }, changed, build, shape, mesh, viewDir, TYPES, pdf, toTavola, stepsPages };
+})();
+</script>
+</body></html>
