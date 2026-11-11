@@ -85,6 +85,7 @@ a.btn{text-decoration:none;color:inherit;box-sizing:border-box}
 #ctxbar .hint{color:var(--muted);font-size:12.5px;line-height:1.35;text-align:center}
 #ctxbar .lbl{font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:700;text-align:center;margin-top:6px}
 #ctxbar .seg{flex-direction:column}
+#ctxbar>*{flex-shrink:0} /* con tante voci la barra si scorre, invece di schiacciare i pulsanti fino a farli sparire */
 #ctxbar .seg .btn{width:100%}
 #ctxbar .seg .btn+.btn{border-left:0;border-top:1px solid var(--line)}
 #ctxbar .chip,#ctxbar .numbox{width:100%;justify-content:center;padding:0 6px}
@@ -900,6 +901,7 @@ function paintOverlay() {
     G.beginPath(); G.moveTo(a.x, a.y); G.lineTo(b.x, b.y); G.stroke(); G.restore();
   }
   const pv = gst.prev;
+  if (pv && pv.kind === 'dotrow') for (const q of pv.pts) dotAt(q, ACC);
   if (pv && pv.kind === 'dim') { paintDim(pv.s); dotAt({ x: pv.s.x1, y: pv.s.y1 }, ACC); dotAt({ x: pv.s.x2, y: pv.s.y2 }, ACC); }
   if (pv && pv.kind === 'line') {
     setW(); penStyle(U.pen, U.dash); if (pv.err) { G.strokeStyle = '#c0392b'; G.setLineDash([0.2, 0.15]); }
@@ -1047,7 +1049,7 @@ function onDown(p, e) {
   const lt = bodyAt(p, true);
   if (lt) { select(lt); toast('Strumento bloccato: per spostarlo tocca “Sblocca”. Puoi disegnare lungo i suoi bordi.'); return; }
   if (U.mode === 'segmento') { const tg = stopTargets(), q = placeSnap(p, tg); return G0('seg', null, { a: q || p, snapPt: q, tg }); }
-  if (U.mode === 'punto') { placePoint(p); return; }
+  if (U.mode === 'punto') { if (U.dotRow) { const q = placeSnap(p); return G0('dotrow', null, { a: q || p, snapPt: q }); } placePoint(p); return; }
   if (U.mode === 'quota') { // toccando la linea di una quota la si sposta; altrimenti se ne disegna una nuova
     const tol = (U.tf > 1 ? 18 : 12) / V.s, near = x => { const g = dimGeom(x); return Math.min(distSeg(p, g.P1, g.P2), dist(p, g.tp) - 0.25); }; // solo la linea di misura e la cifra, non le linee di riferimento
     const dq = D.strokes.filter(x => x.type === 'dim' && near(x) <= tol).sort((a, b) => near(a) - near(b))[0];
@@ -1181,6 +1183,10 @@ function onMove(p) {
       const B = placeSnap(p, g.tg) || p; g.snapPt = placeSnap(p, g.tg); g.label = null;
       g.prev = dist(g.a, B) * V.s < 5 ? null : { kind: 'dim', s: dimFrom(g.a, B) }; break;
     }
+    case 'dotrow': { // trascinando: i punti lungo il tratto dal primo al secondo punto
+      const B = placeSnap(p) || p; g.snapPt = placeSnap(p);
+      g.prev = dist(g.a, B) * V.s < 12 ? null : { kind: 'dotrow', pts: rowPts({ x1: g.a.x, y1: g.a.y, x2: B.x, y2: B.y }, g.a) }; break;
+    }
     case 'dimmove': { // la linea di misura segue il dito (a scatti di mezzo centimetro con i quadretti)
       if (!g.undone) { pushUndo(); g.undone = true; }
       let c = add(g.o, sub(p, g.p0)); if (D.sheet.gridSnap && D.sheet.grid) c = gridSnap(c); g.obj.cx = r3(c.x); g.obj.cy = r3(c.y); snapCache = null; break;
@@ -1263,6 +1269,7 @@ function onUp(p) {
     }
     case 'dimab': if (g.prev) { pushUndo(); addStroke(g.prev.s); changed(); } else if (!g.moved) toast('Trascina dal primo al secondo punto da quotare.'); break;
     case 'dimmove': if (g.undone) changed(); break;
+    case 'dotrow': if (g.prev) addDots(g.prev.pts); else dotRowAt(g.p0); break;
     case 'brush': pushUndo(); addStroke({ type: 'brush', pts: g.pts, w: U.col.bw, color: U.col.color, alpha: U.col.alpha }); changed(); break;
     case 'free':
       if (!g.stopped && g.pts.length >= 2) { const l = g.pts[g.pts.length - 1], q = placeSnap({ x: l[0], y: l[1] }, g.tg); if (q) g.pts[g.pts.length - 1] = [r3(q.x), r3(q.y)]; }
@@ -1597,6 +1604,43 @@ function paintSelStrokes() {
   }
 }
 
+// fila di punti a distanza fissa lungo una linea: segmento (dall'estremo «from»), circonferenza o arco
+function rowPts(t, from) {
+  const gap = U.dotGap || 1, out = [];
+  if (t.cx !== undefined) { // circonferenza o arco: lungo l'arco, a distanza «gap» misurata sull'arco
+    const full = Math.abs(t.sw) >= TAU - 1e-6, len = Math.abs(t.sw) * t.r, step = gap / t.r * Math.sign(t.sw || 1);
+    let a0 = t.a0; if (full && from) a0 = Math.atan2(from.y - t.cy, from.x - t.cx);
+    else if (from && dist(from, arcPt(t, t.a0 + t.sw)) < dist(from, arcPt(t, t.a0))) { a0 = t.a0 + t.sw; return rowPts(Object.assign({}, t, { a0, sw: -t.sw }), null); }
+    for (let k = 0; k * gap <= len + 1e-6; k++) { if (full && k * gap > len - 1e-6 && k) break; out.push(arcPt(t, a0 + k * step)); }
+    return out;
+  }
+  let A = { x: t.x1, y: t.y1 }, B = { x: t.x2, y: t.y2 }; if (from && dist(from, B) < dist(from, A)) [A, B] = [B, A];
+  const L = dist(A, B), d = L > 1e-9 ? mul(sub(B, A), 1 / L) : { x: 0, y: 0 };
+  for (let k = 0; k * gap <= L + 1e-6; k++) out.push(add(A, mul(d, k * gap)));
+  return out;
+}
+function addDots(pts) {
+  const fresh = pts.map(q => ({ x: r3(q.x), y: r3(q.y) })).filter((q, i, a) => inSheet(q) && !D.strokes.some(s => s.type === 'dot' && Math.hypot(s.x - q.x, s.y - q.y) < 0.02) && a.findIndex(o => Math.hypot(o.x - q.x, o.y - q.y) < 0.02) === i);
+  if (!fresh.length) { toast('Qui ci sono già i punti'); return; }
+  pushUndo(); for (const q of fresh) addStroke({ type: 'dot', x: q.x, y: q.y, style: U.dotStyle, pen: U.pen, dash: false });
+  changed(); toast(fresh.length + ' punti, ogni ' + fmt(U.dotGap || 1) + ' cm');
+}
+function dotRowAt(p) { // toccando una linea: i punti lungo tutta la linea, dall'estremo più vicino al tocco
+  const tol = 16 * (U.tf || 1) / V.s; let best = null;
+  for (const t of stopTargets()) {
+    let q; if (t.cx !== undefined) { const v = sub(p, { x: t.cx, y: t.cy }), l = len(v); if (l < 1e-9) continue; q = add({ x: t.cx, y: t.cy }, mul(v, t.r / l)); if (!inArc(t, q)) continue; }
+    else { const a = { x: t.x1, y: t.y1 }, ab = sub({ x: t.x2, y: t.y2 }, a), l2 = dot(ab, ab); q = l2 < 1e-12 ? a : add(a, mul(ab, clamp(dot(sub(p, a), ab) / l2, 0, 1))); }
+    const dd = dist(p, q); if (dd < tol && (!best || dd < best.dd)) best = { dd, t, q };
+  }
+  if (!best) { toast('Tocca una linea, il bordo o una circonferenza: i punti vanno lungo tutta la linea. Oppure trascina da un punto a un altro.'); return; }
+  addDots(rowPts(best.t, best.t.cx !== undefined && Math.abs(best.t.sw) >= TAU - 1e-6 ? best.q : p));
+}
+function dotBorder() { // tutti e quattro i lati della squadratura, partendo dagli angoli in alto e a sinistra
+  const sh = D.sheet, { w, h } = sheetDims(sh), m = sh.margin;
+  if (!sh.frame || m * 2 >= Math.min(w, h)) { toast('Il foglio non ha la squadratura: attivala in Foglio.', 'warn'); return; }
+  const sides = [[m, m, w - m, m], [m, h - m, w - m, h - m], [m, m, m, h - m], [w - m, m, w - m, h - m]];
+  addDots(sides.flatMap(([x1, y1, x2, y2]) => rowPts({ x1, y1, x2, y2 }, { x: x1, y: y1 })));
+}
 function placePoint(p) {
   const q = placeSnap(p) || p, at = { x: r3(q.x), y: r3(q.y) };
   if (D.strokes.some(s => s.type === 'dot' && Math.hypot(s.x - at.x, s.y - at.y) < 0.02)) { toast('Qui c\'è già un punto'); return; }
@@ -1936,7 +1980,12 @@ function renderCtx() {
       ${fl ? `<div class="lbl">Bordi</div><button class="chip ${U.col.all ? 'on' : ''}" data-a="cwalls">${U.col.all ? 'Tutte le linee' : 'Solo contorni HB'}</button>`
            : `<div class="lbl">Tratto</div><div class="seg">${[[0.3, 'Sottile'], [0.6, 'Medio'], [1.2, 'Largo']].map(([v, n]) => `<button class="btn ${U.col.bw === v ? 'on' : ''}" data-a="cbw" data-v="${v}">${n}</button>`).join('')}</div>`}`;
   } else if (U.mode === 'punto') {
-    h = `<div class="ttl">Punto</div><span class="hint">Tocca dove vuoi il punto: si aggancia a incroci, linee e quadretti. Segue la matita scelta in alto (2H o HB).</span>
+    const row = !!U.dotRow;
+    h = `<div class="ttl">Punto</div>
+      <div class="lbl">Fila di punti</div><div class="seg"><button class="btn ${row ? '' : 'on'}" data-a="dotrow" data-v="0">Uno alla volta</button><button class="btn ${row ? 'on' : ''}" data-a="dotrow" data-v="1">Fila</button></div>
+      ${row ? `<div class="lbl">Ogni (cm)</div><button class="numbox" data-a="dotgap">${fmt(U.dotGap || 1)} cm</button><button class="chip" data-a="dotborder">Tutto il bordo</button>
+      <span class="hint">Tocca una linea o il bordo: i punti vanno lungo tutta la linea, dall'estremo più vicino. Oppure trascina da un punto a un altro.</span>`
+      : `<span class="hint">Tocca dove vuoi il punto: si aggancia a incroci, linee e quadretti. Segue la matita scelta in alto (2H o HB).</span>`}
       <div class="lbl">Segno</div><div class="g2"><button class="chip ${U.dotStyle === 'dot' ? 'on' : ''}" data-a="dotstyle" data-v="dot">● Punto</button><button class="chip ${U.dotStyle === 'cross' ? 'on' : ''}" data-a="dotstyle" data-v="cross">✕ Croce</button></div>
       <div class="lbl">Lettera</div><button class="chip ${U.dotLetter ? 'on' : ''}" data-a="dotletter">${U.dotLetter ? 'Sì · prossima ' + esc(U.nextLetter) : 'Nessuna'}</button>${snapControls()}`;
   } else if (U.mode === 'lettere') {
@@ -1985,6 +2034,9 @@ $('#ctxbar').addEventListener('click', e => {
   else if (a === 'cwalls') { U.col.all = !U.col.all; saveCol(); renderCtx(); toast(U.col.all ? 'Anche i tratti di costruzione (2H) fanno da bordo.' : 'Fanno da bordo solo i contorni (HB) e la squadratura.'); }
   else if (a === 'cbw') { U.col.bw = +b.dataset.v; saveCol(); renderCtx(); }
   else if (a === 'dotstyle') { U.dotStyle = b.dataset.v; renderCtx(); }
+  else if (a === 'dotrow') { U.dotRow = b.dataset.v === '1'; renderCtx(); }
+  else if (a === 'dotgap') openNum({ title: 'Distanza tra i punti (cm)', value: U.dotGap || 1, min: 0.1, max: 30, onOk: v => { U.dotGap = v; renderCtx(); } });
+  else if (a === 'dotborder') dotBorder();
   else if (a === 'dotletter') { U.dotLetter = !U.dotLetter; renderCtx(); }
   else if (a === 'gsnap') { D.sheet.gridSnap = !D.sheet.gridSnap; changed(); toast(D.sheet.gridSnap ? 'Gli estremi dei segmenti si fermano sugli incroci dei quadretti.' : 'Aggancio ai quadretti spento: segmenti liberi.'); }
   else if (a === 'lock' && t) { pushUndo(); t.locked = !t.locked; changed(); }
@@ -2045,6 +2097,7 @@ const GUIDA = [
     'Nella barra a destra: <b>Allineata</b> (parallela ai due punti), <b>Orizzontale</b> o <b>Verticale</b>. Si sposta e si cancella come gli altri segni.']],
   ['Punto', [
     'Tocca dove vuoi il punto: si aggancia a incroci, linee e quadretti. Toccando vicino al centro di un segmento, il punto va <b>esattamente a metà</b>.',
+    '<b>Fila di punti</b> (barra a destra): scegli <b>ogni quanti cm</b>, poi tocca una linea, il bordo della squadratura o una circonferenza (i punti vanno lungo tutta la linea, dall’estremo più vicino al tocco), oppure trascina da un punto a un altro. <b>Tutto il bordo</b> mette i punti su tutti e quattro i lati, partendo dagli angoli.',
     'A destra scegli <b>pallino</b> o <b>croce</b> e, se vuoi, la <b>lettera</b> automatica (A, B, C…).']],
   ['Matita', [
     'Tratto a mano libera: parte e finisce sugli incroci dei quadretti e <b>si ferma quando incontra una linea</b>.',
