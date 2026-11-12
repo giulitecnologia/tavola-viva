@@ -197,6 +197,7 @@ details.more{background:#fff;border:1px solid var(--line);border-radius:12px;pad
       <button class="btn" id="prevStep"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5-7 7 7 7"/></svg>Indietro</button>
       <span class="lbl" id="stepLbl">Passaggio 1 di 1</span>
       <button class="btn" id="nextStep">Avanti<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m9 5 7 7-7 7"/></svg></button>
+      <button class="btn" id="redNewBtn" title="Le linee nuove di ogni passaggio in rosso, quelle di prima del colore della matita">Nuove in rosso</button>
       <button class="btn primary" id="resumeBtn">Riprendi disegno</button>
       <button class="btn ghost" id="delStep" title="Elimina questo passaggio">Elimina</button>
     </div>
@@ -389,7 +390,7 @@ function newDoc() {
 let D = newDoc();
 const COLORS = [['Rosso', '#e53935'], ['Arancio', '#fb8c00'], ['Giallo', '#fdd835'], ['Verde', '#43a047'], ['Azzurro', '#29b6f6'], ['Blu', '#1e66c9'], ['Viola', '#8e44ad'], ['Marrone', '#8d5a3b'], ['Grigio', '#8a9399']];
 const COLPREF = 'tavolaviva.colore';
-const U = { stepsPer: (() => { try { return +localStorage.getItem('tavolaviva.passaggiPerPagina') || 4; } catch (_) { return 4; } })(), angGuide: (() => { try { return localStorage.getItem('tavolaviva.angoli') !== '0'; } catch (_) { return true; } })(), cg: null, radii: (() => { try { return JSON.parse(localStorage.getItem('tavolaviva.raggi')) || []; } catch (_) { return []; } })(), col: Object.assign({ mode: 'fill', color: '#29b6f6', alpha: 0.5, bw: 0.6, all: false }, (() => { try { return JSON.parse(localStorage.getItem(COLPREF)) || {}; } catch (_) { return {}; } })()), mode: 'sposta', pen: 'HB', dash: false, sel: null, selS: [], addSel: false, dotStyle: 'dot', dotLetter: false, lenMode: 'libera', lenVal: 10, view: -1, viewData: null, letter: 'punto', nextLetter: 'A', textSize: 0.5, hoverEdge: null };
+const U = { redNew: (() => { try { return localStorage.getItem('tavolaviva.nuoveRosse') !== '0'; } catch (_) { return true; } })(), stepsPer: (() => { try { return +localStorage.getItem('tavolaviva.passaggiPerPagina') || 4; } catch (_) { return 4; } })(), angGuide: (() => { try { return localStorage.getItem('tavolaviva.angoli') !== '0'; } catch (_) { return true; } })(), cg: null, radii: (() => { try { return JSON.parse(localStorage.getItem('tavolaviva.raggi')) || []; } catch (_) { return []; } })(), col: Object.assign({ mode: 'fill', color: '#29b6f6', alpha: 0.5, bw: 0.6, all: false }, (() => { try { return JSON.parse(localStorage.getItem(COLPREF)) || {}; } catch (_) { return {}; } })()), mode: 'sposta', pen: 'HB', dash: false, sel: null, selS: [], addSel: false, dotStyle: 'dot', dotLetter: false, lenMode: 'libera', lenVal: 10, view: -1, viewData: null, letter: 'punto', nextLetter: 'A', textSize: 0.5, hoverEdge: null };
 
 /* ================= annulla / ripristina ================= */
 let undoS = [], redoS = [];
@@ -672,9 +673,13 @@ function drawTxt(str, p, sizeCm, col, align, rot, opt) {
   if (opt.halo) { G.lineWidth = 4; G.strokeStyle = 'rgba(255,255,255,.92)'; G.lineJoin = 'round'; G.strokeText(str, 0, 0); }
   G.fillText(str, 0, 0); G.restore();
 }
+// linee in rosso: scelte a mano (s.red) o, guardando i passaggi, quelle nuove di quel passaggio (NEWIDS)
+const REDCOL = '#e0281b'; let RED = false, NEWIDS = null;
+const inkC = c => RED ? REDCOL : c;
 function penStyle(pen, dash) {
   const P = PENS[pen] || PENS.HB; let lw = Math.max(P.w, P.min / V.s), col = P.col;
   if (U.lim && !U.exporting) { lw = Math.max(lw, (pen === '2H' ? 2.6 : 4.4) / V.s); col = pen === '2H' ? '#56636f' : '#0b0e10'; } // solo sullo schermo
+  if (RED) { col = REDCOL; lw = Math.max(lw, (pen === '2H' ? 2 : 3) / V.s); } // in rosso anche le linee 2H si vedono bene
   G.lineWidth = lw; G.strokeStyle = col;
   G.setLineDash(dash ? DASH : []); G.lineCap = dash ? 'butt' : 'round'; G.lineJoin = 'round';
 }
@@ -683,7 +688,8 @@ function draw() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; render(
 function render() {
   const data = U.view >= 0 ? U.viewData : D;
   setS(); G.setLineDash([]); G.fillStyle = DESK; G.fillRect(0, 0, CW, CH);
-  paintSheet(data, { ui: true });
+  NEWIDS = U.view >= 0 && U.redNew && D.steps[U.view] ? stepNew(D.steps, U.view) : null;
+  try { paintSheet(data, { ui: true }); } finally { NEWIDS = null; }
   if (U.view < 0) paintSelStrokes();
   paintTools(data);
   if (U.view < 0) paintOverlay();
@@ -747,22 +753,28 @@ function paintDim(s) {
   const a = sub(g.P1, mul(g.d, 0.2)), b = add(g.P2, mul(g.d, 0.2)); G.moveTo(a.x, a.y); G.lineTo(b.x, b.y); G.stroke();
   penStyle('HB', false); const t = mul(add(g.d, { x: -g.d.y, y: g.d.x }), 0.12 / Math.SQRT2); G.beginPath(); // trattini obliqui a 45°
   for (const P of [g.P1, g.P2]) { G.moveTo(P.x - t.x, P.y - t.y); G.lineTo(P.x + t.x, P.y + t.y); } G.stroke();
-  drawTxt(fmt(g.val), g.tp, DIM_EM, PENS.HB.col, 'center', g.ang, { minPx: 0 });
+  drawTxt(fmt(g.val), g.tp, DIM_EM, inkC(PENS.HB.col), 'center', g.ang, { minPx: 0 });
 }
 function paintStroke(s) {
+  RED = s.type !== 'fill' && s.type !== 'brush' && !!(s.red || (NEWIDS && NEWIDS.has(s.id)));
+  try { paintStroke_(s); } finally { RED = false; }
+}
+// ids dei segni nuovi nel passaggio i (rispetto al passaggio prima)
+function stepNew(S, i) { const prev = new Set(i > 0 ? S[i - 1].strokes.map(x => x.id) : []); return new Set(S[i].strokes.filter(x => !prev.has(x.id)).map(x => x.id)); }
+function paintStroke_(s) {
   setW();
   if (s.type === 'dim') { paintDim(s); return; }
   if (s.type === 'fill') { G.save(); G.globalAlpha = s.alpha; G.imageSmoothingEnabled = true; G.drawImage(fillCanvas(s), s.x, s.y, s.w, s.h); G.restore(); return; }
   if (s.type === 'brush') { G.save(); G.globalAlpha = s.alpha; brushPath(s.pts, s.w, s.color); G.restore(); return; }
-  if (s.type === 'text') { drawTxt(s.text, { x: s.x, y: s.y }, s.size, PENS.HB.col, 'left', 0, { bold: s.bold }); return; }
+  if (s.type === 'text') { drawTxt(s.text, { x: s.x, y: s.y }, s.size, inkC(PENS.HB.col), 'left', 0, { bold: s.bold }); return; }
   if (s.type === 'module') {
-    G.setLineDash([]); G.lineWidth = Math.max(PENS['2H'].w, 1 / V.s); G.strokeStyle = PENS['2H'].col; G.strokeRect(s.x, s.y, s.w, s.h);
+    G.setLineDash([]); G.lineWidth = Math.max(PENS['2H'].w, 1 / V.s); G.strokeStyle = inkC(PENS['2H'].col); G.strokeRect(s.x, s.y, s.w, s.h);
     if (s.text) { // scritta alta 0,5 cm, centrata nel modulo
       const cap = Math.min(CAP, s.h), em = cap / 0.716, tw = s.w * 0.96;
       const q = toScr({ x: s.x + s.w / 2, y: s.y + s.h / 2 + cap / 2 });
       G.save(); setS(); G.font = `${em * V.s}px ${FONT_TEC}`;
       const mw = G.measureText(s.text).width, sx = Math.min(1, tw * V.s / Math.max(mw, 1e-6));
-      G.translate(q.x, q.y); G.scale(sx, 1); G.fillStyle = PENS.HB.col; G.textAlign = 'center'; G.textBaseline = 'alphabetic'; G.fillText(s.text, 0, 0); G.restore();
+      G.translate(q.x, q.y); G.scale(sx, 1); G.fillStyle = inkC(PENS.HB.col); G.textAlign = 'center'; G.textBaseline = 'alphabetic'; G.fillText(s.text, 0, 0); G.restore();
     }
     return;
   }
@@ -770,7 +782,7 @@ function paintStroke(s) {
     const P = PENS[s.pen] || PENS.HB, lim = U.lim && !U.exporting;
     const lw = Math.max(P.w, P.min / V.s, lim ? (s.pen === '2H' ? 2.6 : 4.4) / V.s : 0), col = lim ? (s.pen === '2H' ? '#56636f' : '#0b0e10') : P.col;
     if (s.style === 'cross') { penStyle(s.pen, false); const k = Math.max(s.pen === '2H' ? 0.1 : 0.14, lw * 3); G.beginPath(); G.moveTo(s.x - k, s.y - k); G.lineTo(s.x + k, s.y + k); G.moveTo(s.x - k, s.y + k); G.lineTo(s.x + k, s.y - k); G.stroke(); return; }
-    G.fillStyle = col; G.beginPath(); G.arc(s.x, s.y, lw * 1.4, 0, TAU); G.fill(); return;
+    G.fillStyle = inkC(col); G.beginPath(); G.arc(s.x, s.y, lw * 1.4, 0, TAU); G.fill(); return;
   }
   if (s.type === 'mark') { // centro di una circonferenza: crocetta
     penStyle(s.pen, false); G.beginPath(); G.moveTo(s.x - s.size, s.y); G.lineTo(s.x + s.size, s.y); G.moveTo(s.x, s.y - s.size); G.lineTo(s.x, s.y + s.size); G.stroke(); return;
@@ -1888,7 +1900,7 @@ function renderTop() {
   $('#dashBtn').classList.toggle('on', U.dash);
   const viewing = U.view >= 0;
   $('#undoBtn').disabled = viewing || !undoS.length; $('#redoBtn').disabled = viewing || !redoS.length;
-  $('#stepNormal').hidden = viewing; $('#stepView').hidden = !viewing; $('#penGrp').hidden = viewing; $('#undoGrp').hidden = viewing;
+  $('#redNewBtn').classList.toggle('on', !!U.redNew); $('#stepNormal').hidden = viewing; $('#stepView').hidden = !viewing; $('#penGrp').hidden = viewing; $('#undoGrp').hidden = viewing;
   $('#stepCount').textContent = D.steps.length; $('#stepsBtn').disabled = !D.steps.length;
   if (viewing) { $('#stepLbl').textContent = 'Passaggio ' + (U.view + 1) + ' di ' + D.steps.length; $('#prevStep').disabled = U.view <= 0; $('#nextStep').disabled = U.view >= D.steps.length - 1; }
   $('#banner').hidden = !viewing && !D.example;
@@ -1966,7 +1978,8 @@ function renderCtx() {
     const lk = ss.some(x => !x.unlocked);
     h = `<div class="ttl">${ss.length === 1 ? strokeName(ss[0]) : ss.length + ' elementi'}</div>
       <span class="hint">${U.addSel ? 'Tocca altri segni per aggiungerli o toglierli.' : lk ? 'Bloccato: tocca “Sblocca” per poterlo spostare.' : 'Trascinalo: si aggancia e si allinea agli altri segni.'}</span>
-      <button class="chip ${lk ? '' : 'on'}" data-a="slock">${lockIcon(lk)}${lk ? 'Sblocca' : 'Blocca'}</button><div class="sp"></div>
+      <button class="chip ${lk ? '' : 'on'}" data-a="slock">${lockIcon(lk)}${lk ? 'Sblocca' : 'Blocca'}</button>
+      <div class="lbl">Colore</div><button class="chip ${ss.every(x => x.red) ? 'on' : ''}" data-a="sred"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:${REDCOL};flex:none"></span>Rosso</button><button class="chip ${ss.every(x => !x.red) ? 'on' : ''}" data-a="sink"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#1c2126;flex:none"></span>Colore matita</button><div class="sp"></div>
       <button class="chip ${U.addSel ? 'on' : ''}" data-a="addsel">Seleziona altri</button><button class="chip" data-a="selall">Seleziona tutto</button><button class="chip" data-a="selnone">Deseleziona</button>`;
   } else if (t && t.kind === 'compasso') {
     const ph = U.cg && U.cg.id === t.id ? U.cg.phase : null;
@@ -2023,6 +2036,7 @@ $('#ctxbar').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return; const t = selTool(), a = b.dataset.a;
   if (b.dataset.l) { U.letter = b.dataset.l; renderCtx(); return; }
   if (a === 'slock') { const ss = selStrokes(), lk = ss.some(x => !x.unlocked); pushUndo(); ss.forEach(x => { if (lk) x.unlocked = true; else delete x.unlocked; }); changed(); if (lk) toast(ss.length > 1 ? 'Sbloccati: ora puoi trascinarli.' : 'Sbloccato: ora puoi trascinarlo.'); }
+  else if (a === 'sred' || a === 'sink') { const ss = selStrokes().filter(x => x.type !== 'fill' && x.type !== 'brush'); if (!ss.length) return; pushUndo(); ss.forEach(x => { if (a === 'sred') x.red = true; else delete x.red; }); U.selS = []; U.addSel = false; changed(); /* deselezionate: il colore si vede subito */ toast(a === 'sred' ? (ss.length > 1 ? 'Linee in rosso.' : 'Linea in rosso.') : 'Di nuovo del colore della matita.'); }
   else if (a === 'addsel') { U.addSel = !U.addSel; renderCtx(); }
   else if (a === 'selall') { U.selS = D.strokes.map(x => x.id); renderCtx(); draw(); }
   else if (a === 'selnone') { U.selS = []; U.addSel = false; renderCtx(); draw(); }
@@ -2067,6 +2081,7 @@ function viewStep(i) { U.view = i; U.viewData = clone(D.steps[i]); U.sel = null;
 $('#stepsBtn').onclick = () => { if (D.steps.length) viewStep(0); };
 $('#prevStep').onclick = () => { if (U.view > 0) viewStep(U.view - 1); };
 $('#nextStep').onclick = () => { if (U.view < D.steps.length - 1) viewStep(U.view + 1); };
+$('#redNewBtn').onclick = () => { U.redNew = !U.redNew; try { localStorage.setItem('tavolaviva.nuoveRosse', U.redNew ? '1' : '0'); } catch (_) { } renderTop(); draw(); toast(U.redNew ? 'Le linee nuove di ogni passaggio sono in rosso.' : 'Tutte le linee del colore della matita.'); };
 $('#resumeBtn').onclick = () => { U.view = -1; U.viewData = null; layout(); renderTop(); renderCtx(); };
 $('#delStep').onclick = () => confirmBox('Eliminare il passaggio ' + (U.view + 1) + '? Il disegno completo non cambia.', 'Elimina', () => {
   D.steps.splice(U.view, 1); if (!D.steps.length) { U.view = -1; U.viewData = null; layout(); } else viewStep(Math.min(U.view, D.steps.length - 1)); changed();
@@ -2136,7 +2151,9 @@ const GUIDA = [
   ['Passaggi', [
     '<b>Segna passaggio</b> registra il disegno com’è in quel momento, con gli strumenti al loro posto.',
     '<b>Passaggi</b> mostra la costruzione fase per fase con <b>Avanti</b> e <b>Indietro</b>; <b>Riprendi disegno</b> torna al lavoro.',
-    'Nei passaggi accanto al compasso compare l’apertura, per esempio “Compasso aperto AO = 4 cm”.']],
+    'Nei passaggi accanto al compasso compare l’apertura, per esempio “Compasso aperto AO = 4 cm”.',
+    'Con <b>Nuove in rosso</b> (acceso all’inizio) le linee aggiunte in quel passaggio sono rosse e quelle di prima restano del colore della matita: così si vede subito cosa è cambiato. Vale anche per i passaggi in PDF.',
+    'Per colorare di rosso linee scelte da te: con <b>Sposta</b> tocca una linea (con <b>Seleziona altri</b> anche più di una) e premi <b>Rosso</b> nella barra a destra; <b>Colore matita</b> la fa tornare come prima.']],
   ['Proiezioni ortogonali', [
     'Il pulsante <b>Proiezioni</b> in alto apre una pagina a parte con il <b>triedro di Monge</b>: solidi e gruppi di solidi, proiezioni su PV, PO e PL, sezioni e apertura dei piani fino al disegno sul foglio.',
     '<b>Un dito su un solido</b> lo sposta sul PO a scatti di mezzo centimetro (se lo porti sopra un altro solido ci si appoggia); in <b>Vista di fronte</b> lo alzi e lo abbassi. <b>Un dito sul vuoto</b> gira il triedro.',
@@ -2454,7 +2471,8 @@ function loadDoc(o) {
 function renderToCanvas(data, pxPerCm, opts) {
   const { w, h } = sheetDims(data.sheet), c = document.createElement('canvas'); c.width = Math.round(w * pxPerCm); c.height = Math.round(h * pxPerCm);
   const sv = { G, DPR, V, CW, CH }; G = c.getContext('2d'); DPR = 1; V = { s: pxPerCm, ox: 0, oy: 0 }; CW = c.width; CH = c.height; U.exporting = true;
-  try { paintSheet(data, { ui: false }); if (opts && opts.tools) paintTools(clone(data)); } finally { ({ G, DPR, V, CW, CH } = sv); U.exporting = false; }
+  NEWIDS = opts && opts.newIds || null;
+  try { paintSheet(data, { ui: false }); if (opts && opts.tools) paintTools(clone(data)); } finally { ({ G, DPR, V, CW, CH } = sv); U.exporting = false; NEWIDS = null; }
   return c;
 }
 // tutti i passaggi in un'unica immagine, numerati, con gli strumenti nella loro posizione
@@ -2515,7 +2533,7 @@ function exportStepsPDF() {
     const per = U.stepsPer || 4;
     if (per > 1) { downloadBlob(makePDF(stepsSheets(S, per)), safeName(D.name) + '-passaggi.pdf'); return; }
     const pages = S.map((st, i) => {
-      const { w, h } = sheetDims(st.sheet), k = Math.min(60, 3000 / Math.max(w, h)), c = renderToCanvas(st, k, { tools: true }), g = c.getContext('2d');
+      const { w, h } = sheetDims(st.sheet), k = Math.min(60, 3000 / Math.max(w, h)), c = renderToCanvas(st, k, { tools: true, newIds: U.redNew ? stepNew(S, i) : null }), g = c.getContext('2d');
       const m = Math.max(st.sheet.margin || 1, 0.6); // “Passaggio n di N” in alto al centro, nel margine
       g.setTransform(1, 0, 0, 1, 0, 0); g.setLineDash([]); g.fillStyle = ACC; g.font = `700 ${Math.round(TXT_EM * k)}px ${FONT_UI}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('Passaggio ' + (i + 1) + ' di ' + S.length, c.width / 2, m / 2 * k);
       return { c, w, h };
@@ -2536,7 +2554,7 @@ function stepsSheets(S, per) {
     for (let j = 0; j < per; j++) {
       const i = p * per + j; if (i >= S.length) break;
       const st = S[i], x = mg + (j % cols) * (cw + gap), y = y0 + Math.floor(j / cols) * (ch + gap), { w, h } = sheetDims(st.sheet), sc = Math.min(cw / w, (ch - lab) / h);
-      const img = renderToCanvas(st, K * sc, { tools: true }), iw = w * sc, ih = h * sc, ix = x + (cw - iw) / 2, iy = y + lab;
+      const img = renderToCanvas(st, K * sc, { tools: true, newIds: U.redNew ? stepNew(S, i) : null }), iw = w * sc, ih = h * sc, ix = x + (cw - iw) / 2, iy = y + lab;
       g.fillStyle = ACC; g.font = `700 ${0.45 * K}px ${FONT_UI}`; g.textAlign = 'left'; g.fillText('Passaggio ' + (i + 1), ix * K, (y + lab * 0.45) * K);
       g.drawImage(img, ix * K, iy * K, iw * K, ih * K); g.strokeStyle = '#8f9a9e'; g.lineWidth = 1; g.strokeRect(ix * K + 0.5, iy * K + 0.5, iw * K - 1, ih * K - 1);
     }
