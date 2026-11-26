@@ -377,6 +377,13 @@ const defaultSheet = () => ({ fmt: '33x24', orient: 'O', cw: 33, ch: 24, grid: f
 // le tavole e le preferenze salvate prima che gli agganci diventassero predefiniti li attivano una volta
 const fixSheet = sh => { if (!(sh.gsv >= 2)) sh.gridSnap = true; if (!(sh.gsv >= 3)) sh.stopLines = true; sh.gsv = 3; return sh; };
 const SQMIN = { sq45: 22.5, sq3060: 32.5 }, SQSCALE = { sq45: 20, sq3060: 30 }, SQX0 = 0.5;
+// squadratura: rettangolo e centri. A quadretti i lati di destra e in basso stanno sulla riga dei quadretti
+// (sull'A4 29,7 × 21 a 1 cm dal bordo cadrebbero a metà quadretto); anche i segni di centro cadono sui quadretti.
+function frameBox(sh) {
+  const { w, h } = sheetDims(sh), m = sh.margin, g = v => sh.grid ? Math.floor(v * 2 + 1e-6) / 2 : v, c = v => sh.grid ? Math.round(v) / 2 : v / 2;
+  const L = sh.grid ? Math.ceil(m * 2 - 1e-6) / 2 : m, T = L;
+  return { L, T, R: g(w - m), B: g(h - m), cx: c(w), cy: c(h), ok: !!sh.frame && m * 2 < Math.min(w, h) };
+}
 function sheetDims(sh) {
   let w, h;
   if (sh.fmt === 'custom') { w = sh.cw; h = sh.ch; } else { const f = FORMATS[sh.fmt] || FORMATS['33x24']; w = f.w; h = f.h; }
@@ -521,10 +528,10 @@ function snapPtsOf(list) {
     else if (s.type === 'mark' || s.type === 'dot') pts.push({ x: s.x, y: s.y });
     else if (s.type === 'arc') { arcs.push(s); pts.push({ x: s.cx, y: s.cy }); } // gli estremi degli archi di costruzione non sono punti notevoli: contano centri e incroci
   }
-  const sh = D.sheet, dm = sheetDims(sh), m = sh.margin;
-  if (sh.frame && m * 2 < Math.min(dm.w, dm.h)) {
-    pts.push({ x: m, y: m }, { x: dm.w - m, y: m }, { x: m, y: dm.h - m }, { x: dm.w - m, y: dm.h - m });
-    if (sh.centri !== false) pts.push({ x: dm.w / 2, y: m }, { x: dm.w / 2, y: dm.h - m }, { x: m, y: dm.h / 2 }, { x: dm.w - m, y: dm.h / 2 });
+  const sh = D.sheet, F = frameBox(sh);
+  if (F.ok) {
+    pts.push({ x: F.L, y: F.T }, { x: F.R, y: F.T }, { x: F.L, y: F.B }, { x: F.R, y: F.B });
+    if (sh.centri !== false) pts.push({ x: F.cx, y: F.T }, { x: F.cx, y: F.B }, { x: F.L, y: F.cy }, { x: F.R, y: F.cy });
   }
   for (let i = 0; i < segs.length; i++) for (let j = i + 1; j < segs.length; j++) { const p = segSeg(segs[i], segs[j]); if (p) pts.push(p); }
   for (const s of segs) for (const c of arcs) pts.push(...segCirc(s, c));
@@ -541,8 +548,8 @@ const gridSnap = p => ({ x: Math.round(p.x * 2) / 2, y: Math.round(p.y * 2) / 2 
 function stopTargets() {
   const out = [];
   for (const s of D.strokes) { if (s.type === 'line') out.push({ x1: s.x1, y1: s.y1, x2: s.x2, y2: s.y2 }); else if (s.type === 'arc') out.push(s); }
-  const sh = D.sheet, { w, h } = sheetDims(sh), m = sh.margin;
-  if (sh.frame && m * 2 < Math.min(w, h)) for (const [a, b, c, d] of [[m, m, w - m, m], [w - m, m, w - m, h - m], [w - m, h - m, m, h - m], [m, h - m, m, m]]) out.push({ x1: a, y1: b, x2: c, y2: d });
+  const F = frameBox(D.sheet);
+  if (F.ok) for (const [a, b, c, d] of [[F.L, F.T, F.R, F.T], [F.R, F.T, F.R, F.B], [F.R, F.B, F.L, F.B], [F.L, F.B, F.L, F.T]]) out.push({ x1: a, y1: b, x2: c, y2: d });
   return out;
 }
 function onLines(p, px, tg) { // punto più vicino a p che sta su una linea già disegnata
@@ -706,14 +713,14 @@ function paintSheet(data, o) {
     for (let y = 0.5; y < h - 1e-6; y += 0.5) { G.moveTo(0, y); G.lineTo(w, y); }
     G.stroke();
   }
-  const m = sh.margin;
-  if (sh.frame && m * 2 < Math.min(w, h)) {
-    G.setLineDash([]); G.lineWidth = Math.max(0.05, 1.8 / V.s); G.strokeStyle = '#1c2126'; G.strokeRect(m, m, w - 2 * m, h - 2 * m);
+  const m = sh.margin, F = frameBox(sh);
+  if (F.ok) {
+    G.setLineDash([]); G.lineWidth = Math.max(0.05, 1.8 / V.s); G.strokeStyle = '#1c2126'; G.strokeRect(F.L, F.T, F.R - F.L, F.B - F.T);
     if (sh.centri !== false) { // segni di centro tratteggiati, per dividere il foglio in quattro
-      const cx = w / 2, cy = h / 2, k = Math.min(0.2, m * 0.4); // trattino di 4 mm a cavallo della linea
+      const cx = F.cx, cy = F.cy, k = Math.min(0.2, m * 0.4); // trattino di 4 mm a cavallo della linea
       G.lineWidth = Math.max(0.03, 1.2 / V.s); G.lineCap = 'butt'; G.beginPath();
-      G.moveTo(cx, m - k); G.lineTo(cx, m + k); G.moveTo(cx, h - m - k); G.lineTo(cx, h - m + k);
-      G.moveTo(m - k, cy); G.lineTo(m + k, cy); G.moveTo(w - m - k, cy); G.lineTo(w - m + k, cy);
+      G.moveTo(cx, F.T - k); G.lineTo(cx, F.T + k); G.moveTo(cx, F.B - k); G.lineTo(cx, F.B + k);
+      G.moveTo(F.L - k, cy); G.lineTo(F.L + k, cy); G.moveTo(F.R - k, cy); G.lineTo(F.R + k, cy);
       G.stroke();
     }
   }
@@ -1398,12 +1405,12 @@ function alignToPoints(t, must) {
 
 /* ---- aggancio alle linee: squadratura, assi di centro, segmenti disegnati ---- */
 function lineTargets() {
-  const out = [], sh = D.sheet, { w, h } = sheetDims(sh), m = sh.margin;
+  const out = [], sh = D.sheet, F = frameBox(sh), { L: l, T: t, R: r, B: b } = F;
   const seg = (a, b) => { const L = dist(a, b); if (L >= 0.5) out.push({ a, b, d: { x: (b.x - a.x) / L, y: (b.y - a.y) / L }, L }); };
-  if (sh.frame && m * 2 < Math.min(w, h)) {
-    seg({ x: m, y: m }, { x: w - m, y: m }); seg({ x: w - m, y: m }, { x: w - m, y: h - m });
-    seg({ x: w - m, y: h - m }, { x: m, y: h - m }); seg({ x: m, y: h - m }, { x: m, y: m });
-    if (sh.centri !== false) { seg({ x: w / 2, y: m }, { x: w / 2, y: h - m }); seg({ x: m, y: h / 2 }, { x: w - m, y: h / 2 }); } // passano per i segni di centro
+  if (F.ok) {
+    seg({ x: l, y: t }, { x: r, y: t }); seg({ x: r, y: t }, { x: r, y: b });
+    seg({ x: r, y: b }, { x: l, y: b }); seg({ x: l, y: b }, { x: l, y: t });
+    if (sh.centri !== false) { seg({ x: F.cx, y: t }, { x: F.cx, y: b }); seg({ x: l, y: F.cy }, { x: r, y: F.cy }); } // passano per i segni di centro
   }
   for (const s of D.strokes) if (s.type === 'line') seg({ x: s.x1, y: s.y1 }, { x: s.x2, y: s.y2 });
   return out;
@@ -1664,9 +1671,9 @@ function dotRowAt(p) { // toccando una linea: i punti lungo tutta la linea, dall
   addDots(rowPts(best.t, best.t.cx !== undefined && Math.abs(best.t.sw) >= TAU - 1e-6 ? best.q : p));
 }
 function dotBorder() { // tutti e quattro i lati della squadratura, partendo dagli angoli in alto e a sinistra
-  const sh = D.sheet, { w, h } = sheetDims(sh), m = sh.margin;
-  if (!sh.frame || m * 2 >= Math.min(w, h)) { toast('Il foglio non ha la squadratura: attivala in Foglio.', 'warn'); return; }
-  const sides = [[m, m, w - m, m], [m, h - m, w - m, h - m], [m, m, m, h - m], [w - m, m, w - m, h - m]];
+  const F = frameBox(D.sheet);
+  if (!F.ok) { toast('Il foglio non ha la squadratura: attivala in Foglio.', 'warn'); return; }
+  const sides = [[F.L, F.T, F.R, F.T], [F.L, F.B, F.R, F.B], [F.L, F.T, F.L, F.B], [F.R, F.T, F.R, F.B]];
   addDots(sides.flatMap(([x1, y1, x2, y2]) => rowPts({ x1, y1, x2, y2 }, { x: x1, y: y1 })));
 }
 function placePoint(p) {
@@ -1710,11 +1717,11 @@ function regionAt(p, all) {
     else if (s.type === 'free') s.pts.forEach((q, i) => i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]));
     else if (s.type === 'module') { g.moveTo(s.x, s.y); g.rect(s.x, s.y, s.w, s.h); }
   }
-  const m = sh.margin; if (sh.frame && m * 2 < Math.min(w, h)) { g.moveTo(m, m); g.rect(m, m, w - 2 * m, h - 2 * m); }
+  const m = sh.margin, F = frameBox(sh); if (F.ok) { g.moveTo(F.L, F.T); g.rect(F.L, F.T, F.R - F.L, F.B - F.T); }
   // fessure piccole: ogni estremo libero si collega alla linea più vicina se è a meno di 4 mm
   const bd = D.strokes.filter(s => (all || s.pen !== '2H') && (s.type === 'line' || s.type === 'free' || (s.type === 'arc' && Math.abs(s.sw) < TAU - 1e-6)));
   const tg = []; for (const s of bd) { if (s.type === 'line' || s.type === 'arc') tg.push(s.type === 'line' ? { x1: s.x1, y1: s.y1, x2: s.x2, y2: s.y2, own: s } : Object.assign(Object.create(s), { own: s })); else for (let i = 1; i < s.pts.length; i++) tg.push({ x1: s.pts[i - 1][0], y1: s.pts[i - 1][1], x2: s.pts[i][0], y2: s.pts[i][1], own: s }); }
-  if (sh.frame && m * 2 < Math.min(w, h)) for (const [a, b, c2, d] of [[m, m, w - m, m], [w - m, m, w - m, h - m], [w - m, h - m, m, h - m], [m, h - m, m, m]]) tg.push({ x1: a, y1: b, x2: c2, y2: d });
+  if (F.ok) for (const [a, b, c2, d] of [[F.L, F.T, F.R, F.T], [F.R, F.T, F.R, F.B], [F.R, F.B, F.L, F.B], [F.L, F.B, F.L, F.T]]) tg.push({ x1: a, y1: b, x2: c2, y2: d });
   for (const s of bd) {
     const ends = s.type === 'line' ? [{ x: s.x1, y: s.y1 }, { x: s.x2, y: s.y2 }] : s.type === 'arc' ? [arcPt(s, s.a0), arcPt(s, s.a0 + s.sw)] : [{ x: s.pts[0][0], y: s.pts[0][1] }, { x: s.pts.at(-1)[0], y: s.pts.at(-1)[1] }];
     for (const e of ends) {
@@ -1753,7 +1760,7 @@ function regionAt(p, all) {
     count += on; if (on === v) run++; else { rle.push(run); run = 1; v = on; }
   }
   rle.push(run);
-  return { x: X0 / R, y: Y0 / R, w: pw / R, h: ph / R, pw, ph, rle, count, innerArea: sh.frame ? (w - 2 * m) * (h - 2 * m) * R * R : W * H };
+  return { x: X0 / R, y: Y0 / R, w: pw / R, h: ph / R, pw, ph, rle, count, innerArea: sh.frame ? (frameBox(sh).R - frameBox(sh).L) * (frameBox(sh).B - frameBox(sh).T) * R * R : W * H };
 }
 function fillAt(p) {
   let r = regionAt(p), with2H = false; if (!r) { toast('Tocca dentro una figura per colorarla.'); return; }
@@ -1948,7 +1955,7 @@ document.querySelectorAll('.pal[data-add]').forEach(b => b.onclick = () => {
   if (!last || c.x < 0 || c.y < 0 || c.x > w || c.y > h) { // prima volta, o il foglio è cambiato: posizione comoda
     t = mkTool(kind, kind === 'compasso' && last ? { r: last.r, s: last.s } : null);
     if (kind === 'compasso') { t.x = w / 2 - 3; t.y = h / 2 + 2; }
-    else if (SQMIN[kind]) { t.x = m; t.y = h - m; } // appoggiata sulla squadratura, con l'angolo retto nell'angolo in basso a sinistra
+    else if (SQMIN[kind]) { const F = frameBox(D.sheet); t.x = F.ok ? F.L : m; t.y = F.ok ? F.B : h - m; } // appoggiata sulla squadratura, con l'angolo retto nell'angolo in basso a sinistra
     else { t.x = m + 1; t.y = h - m - (kind === 'riga' ? GW : RW) - 1; }
   }
   // se lo stesso strumento è già lì, il nuovo compare un po' spostato per non coprirlo
@@ -1965,7 +1972,8 @@ function keepOnSheet(t) {
     let s = Math.max(0, lo - Math.min(...vs)) - Math.max(0, Math.max(...vs) - hi);
     if (v0 + s > hi) s = hi - v0; if (v0 + s < lo) s = lo - v0; return s;
   };
-  const dx = fit(P.map(q => q.x), t.x, m, w - m), dy = fit(P.map(q => q.y), t.y, m, h - m);
+  const F = D.sheet.frame ? frameBox(D.sheet) : { L: 0, T: 0, R: w, B: h };
+  const dx = fit(P.map(q => q.x), t.x, F.L, F.R), dy = fit(P.map(q => q.y), t.y, F.T, F.B);
   const k = Math.abs(d.x) > 0.5 ? dx / d.x : Math.abs(d.y) > 0.5 ? dy / d.y : 0;
   if (k) { t.x += d.x * k; t.y += d.y * k; }
 }
