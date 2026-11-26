@@ -2177,7 +2177,7 @@ const GUIDA = [
     'A sinistra scegli il <b>solido</b>, a destra il tipo: <b>isometrica</b> (assi a 30°), <b>cavaliera</b> (profondità a 45° dimezzata) o <b>monometrica</b> (pianta vera a 30°/60°), e le <b>misure</b>. Il riquadro <b>Il solido</b> lo mostra in 3D: trascinalo per girarlo.',
     'Sul foglio 33 × 24 il disegno si costruisce <b>passaggio per passaggio</b> con <b>Avanti</b> e <b>Indietro</b>: le linee nuove sono in arancione e il riquadro in alto dice cosa fare (dove mettere O, quale squadra usare, quali misure riportare).',
     'In alto: <b>PDF consegna</b>, <b>Consegna e soluzione</b>, <b>Passaggi in PDF</b> (4 per pagina) e <b>Porta in Tavola viva</b>, che mette il disegno su un foglio nuovo con i passaggi già pronti.']],
-  ['Foglio', ['Formato (33×24, 48×33, A4, A3 o personalizzato), orientamento, quadretti o foglio bianco, squadratura e margine, agganci e colore dell’interfaccia.']],
+  ['Foglio', ['Formato (33×24, 48×33, A4, A3 o personalizzato), orientamento, quadretti (il foglio diventa un A4, come quello dei ragazzi) o foglio bianco, squadratura e margine, agganci e colore dell’interfaccia.']],
   ['Salvare, aprire e scaricare', [
     '<b>Salva</b> in alto (o Ctrl+S): la prima volta chiede il nome, poi aggiorna la stessa tavola.',
     '<b>Tavole</b>: elenco delle tavole salvate da aprire; <b>Nuovo foglio</b> mette da parte il lavoro attuale nell’elenco.',
@@ -2215,7 +2215,8 @@ function sheetHTML() {
     ${s.fmt === 'custom' ? `<div class="wrap"><span>Larghezza cm</span><button class="numbox" data-a="cw">${fmt(s.cw)}</button><span>Altezza cm</span><button class="numbox" data-a="ch">${fmt(s.ch)}</button></div>` : ''}
     <div class="empty">Foglio attuale: ${fmt(d.w)} × ${fmt(d.h)} cm</div></div>
   <div class="row"><span class="k">Orientamento</span><div class="wrap">${chip(s.orient === 'O', 'orient', 'O', 'Orizzontale')}${chip(s.orient === 'V', 'orient', 'V', 'Verticale')}</div></div>
-  <div class="row"><span class="k">Griglia a quadretti da 0,5 cm</span><div class="wrap">${chip(s.grid, 'grid', '1', 'Visibile')}${chip(!s.grid, 'grid', '0', 'Foglio bianco')}</div></div>
+  <div class="row"><span class="k">Griglia a quadretti da 0,5 cm</span><div class="wrap">${chip(s.grid, 'grid', '1', 'Visibile')}${chip(!s.grid, 'grid', '0', 'Foglio bianco')}</div>
+    <div class="empty">A quadretti il foglio diventa un A4, come quello dei ragazzi; con Foglio bianco torna al formato di prima.</div></div>
   <div class="row"><span class="k">Squadratura</span><div class="wrap">${chip(s.frame, 'frame', '1', 'Sì')}${chip(!s.frame, 'frame', '0', 'No')}<span style="margin-left:8px">Margine cm</span><button class="numbox" data-a="margin">${fmt(s.margin)}</button></div></div>
   <div class="row"><span class="k">Segni di centro sulla squadratura</span><div class="wrap">${chip(s.centri !== false, 'centri', '1', 'Sì')}${chip(s.centri === false, 'centri', '0', 'No')}</div>
     <div class="empty">Trattini a metà di ogni lato, per dividere il foglio in quattro. Il Segmento si aggancia a questi punti.</div></div>
@@ -2253,7 +2254,12 @@ $('#drawerBody').addEventListener('click', e => {
   switch (a) {
     case 'fmt': sheetChange(() => { s.fmt = v; if (v === 'custom') { const d = sheetDims(Object.assign({}, s, { fmt: '33x24' })); s.cw = s.cw || d.w; s.ch = s.ch || d.h; } }); break;
     case 'orient': sheetChange(() => s.orient = v); break;
-    case 'grid': sheetChange(() => s.grid = v === '1'); break;
+    case 'grid': sheetChange(() => { // a quadretti il foglio diventa un A4 vero, come quello dei ragazzi; tornando al foglio bianco riprende il formato di prima
+      const on = v === '1'; if (on === !!s.grid) return; s.grid = on;
+      if (on) { if (s.fmt !== 'A4') { s.fmtPrev = s.fmt; s.fmt = 'A4'; } s.frame = true; }
+      else if (s.fmt === 'A4') { s.fmt = s.fmtPrev && s.fmtPrev !== 'A4' ? s.fmtPrev : '33x24'; delete s.fmtPrev; }
+      toast(on ? 'Foglio A4 a quadretti da 0,5 cm. Per girarlo: Orientamento.' : 'Foglio bianco ' + (FORMATS[s.fmt] ? FORMATS[s.fmt].n : '') + '.');
+    }); break;
     case 'frame': sheetChange(() => s.frame = v === '1'); break;
     case 'centri': sheetChange(() => s.centri = v === '1'); break;
     case 'gridSnap': sheetChange(() => s.gridSnap = v === '1'); break;
