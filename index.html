@@ -1246,7 +1246,19 @@ function onUp(p) {
   const t = g.obj;
   switch (g.type) {
     case 'pan': if (!g.moved) { if (g.hk) editHeader(g.hk); else select(null); } break;
-    case 'move': if (g.moved && t.kind === 'compasso') { t.x = r3(t.x); t.y = r3(t.y); } if (g.moved) changed(); break;
+    case 'move': {
+      // doppio tocco (o doppio clic) su una squadra: si gira dall'altra parte
+      const now = performance.now(), tf = U.tf || 1;
+      if (SQMIN[t.kind] && now - g.t0 < 400 && len(sub(p, g.p0)) * V.s < 12 * tf) {
+        const L = U.lastTap;
+        if (L && L.id === t.id && now - L.at < 500 && len(sub(p, L.p)) * V.s < 40 * tf) {
+          U.lastTap = null; if (!g.undone) pushUndo(); if (g.moved) { t.x = g.o0.x; t.y = g.o0.y; t.rot = g.rot0; } // il dito che trema non la sposta
+          flipSq(t); break;
+        }
+        U.lastTap = { id: t.id, at: now, p };
+      } else U.lastTap = null;
+      if (g.moved && t.kind === 'compasso') { t.x = r3(t.x); t.y = r3(t.y); } if (g.moved) changed(); break;
+    }
     case 'rot': case 'size': case 'crot': case 'cres': case 'open': if (g.moved) changed(); break;
     case 'gcenter': {
       if (g.keep) { // ago ripreso dal passo 3
@@ -1946,6 +1958,7 @@ document.querySelectorAll('.pal[data-add]').forEach(b => b.onclick = () => {
   changed();
 });
 // se girata esce dal foglio, la squadra scorre lungo il lato appoggiato (resta sulla stessa linea) quanto basta per rientrare
+function flipSq(t) { t.flip = !t.flip; if (!t.flip) delete t.flip; keepOnSheet(t); changed(); }
 function keepOnSheet(t) {
   const { w, h } = sheetDims(D.sheet), m = D.sheet.frame ? D.sheet.margin : 0, P = polyL(t).map(q => toW(t, q)), d = edges(t)[sqBase(t)].d;
   const fit = (vs, v0, lo, hi) => { // spostamento per stare tra lo e hi; se non ci sta tutta, l'angolo retto resta dentro
@@ -1989,7 +2002,7 @@ function renderCtx() {
       <div class="sp"></div><button class="chip" data-a="fullc">Circonferenza intera</button><button class="chip ${ph === 'arcA' || ph === 'arcB' ? 'on' : ''}" data-a="arcab">Arco da… a…</button>
       <button class="chip ${ph === 'center' ? 'on' : ''}" data-a="repoint">Punta altrove</button><button class="chip ${ph === 'open' ? 'on' : ''}" data-a="reopen">Cambia apertura</button><button class="chip" data-a="center"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Segna il centro</button>`;
   } else if (t) {
-    h = `<div class="ttl">${TOOLNAME[t.kind]}</div>${SQMIN[t.kind] ? `<button class="chip ${t.flip ? 'on' : ''}" data-a="flip" title="Capovolge la squadra: l’angolo retto e il lato appoggiato restano dove sono"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M9 6L3 18h6z"/><path d="M15 6l6 12h-6z" stroke-dasharray="2.5 2"/></svg>Gira</button>` : ''}${lenControls()}<span class="hint">Appoggia due o tre dita per spostarlo e ruotarlo.</span>${snapControls()}<div class="lbl">Aggancio</div><button class="chip ${D.sheet.magnet ? 'on' : ''}" data-a="magnet">${D.sheet.magnet ? 'Attivo' : 'Spento'}</button>`;
+    h = `<div class="ttl">${TOOLNAME[t.kind]}</div>${SQMIN[t.kind] ? `<button class="chip ${t.flip ? 'on' : ''}" data-a="flip" title="Capovolge la squadra (anche con un doppio tocco sulla squadra): l’angolo retto e il lato appoggiato restano dove sono"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M9 6L3 18h6z"/><path d="M15 6l6 12h-6z" stroke-dasharray="2.5 2"/></svg>Gira</button>` : ''}${lenControls()}<span class="hint">Appoggia due o tre dita per spostarlo e ruotarlo.</span>${snapControls()}<div class="lbl">Aggancio</div><button class="chip ${D.sheet.magnet ? 'on' : ''}" data-a="magnet">${D.sheet.magnet ? 'Attivo' : 'Spento'}</button>`;
   } else if (U.mode === 'quota') {
     const dd = U.dimDir || 'a', c = (v, l) => `<button class="btn ${dd === v ? 'on' : ''}" data-a="dimdir" data-v="${v}">${l}</button>`;
     h = `<div class="ttl">Quota</div><span class="hint" style="font-weight:700;color:var(--accent)">Trascina dal primo al secondo punto: la quota va dalla parte libera. Per spostarla, trascina la sua linea.</span>
@@ -2069,7 +2082,7 @@ $('#ctxbar').addEventListener('click', e => {
   else if (a === 'dotletter') { U.dotLetter = !U.dotLetter; renderCtx(); }
   else if (a === 'gsnap') { D.sheet.gridSnap = !D.sheet.gridSnap; changed(); toast(D.sheet.gridSnap ? 'Gli estremi dei segmenti si fermano sugli incroci dei quadretti.' : 'Aggancio ai quadretti spento: segmenti liberi.'); }
   else if (a === 'lock' && t) { pushUndo(); t.locked = !t.locked; changed(); }
-  else if (a === 'flip' && t && SQMIN[t.kind]) { if (t.locked) { toast('Squadra bloccata: tocca “Sblocca” per girarla.'); return; } pushUndo(); t.flip = !t.flip; if (!t.flip) delete t.flip; keepOnSheet(t); changed(); }
+  else if (a === 'flip' && t && SQMIN[t.kind]) { if (t.locked) { toast('Squadra bloccata: tocca “Sblocca” per girarla.'); return; } pushUndo(); flipSq(t); }
   else if (a === 'remove' && t) removeTool(t);
   else if (a === 'nextletter') openText({ title: 'Prossima lettera', value: '', onOk: v => { if (v.trim()) { U.nextLetter = v.trim().slice(0, 12); renderCtx(); } } });
 });
@@ -2111,7 +2124,7 @@ const GUIDA = [
     'Si usano come il righello: trascina per spostare, freccia ricurva per ruotare, traccia lungo i bordi.',
     'Con l’<b>aggancio magnetico</b> le squadre si accostano bordo contro bordo e scorrono una sull’altra: comodo per <b>parallele e perpendicolari</b>.',
     'Una squadra appoggiata a una linea o alla squadratura ci resta attaccata; per staccarla tirala via di lato.',
-    'Il pulsante <b>⇄ Gira</b> (barra a destra) la capovolge come sul banco: l’angolo retto e il lato appoggiato restano dove sono e la squadra passa dall’altra parte. Serve per le linee inclinate da tutte e due le parti, per esempio a 30° nelle <b>assonometrie</b>.']],
+    'Con un <b>doppio tocco</b> sulla squadra (o il pulsante <b>⇄ Gira</b> nella barra a destra) la capovolgi come sul banco: l’angolo retto e il lato appoggiato restano dove sono e la squadra passa dall’altra parte. Serve per le linee inclinate da tutte e due le parti, per esempio a 30° nelle <b>assonometrie</b>.']],
   ['Compasso', [
     'Toccalo nella colonna a sinistra e segui i passi scritti in verde a destra: <b>1</b> tocca dove puntare l’ago, <b>2</b> tocca fin dove aprirlo (o scrivi la misura), <b>3</b> trascina il dito in qualsiasi punto per tracciare.',
     'Per <b>spostarlo</b>: trascina l’ago, oppure toccalo e poi tocca il nuovo punto. L’apertura resta uguale.',
